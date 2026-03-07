@@ -1,4 +1,5 @@
 use crate::event::{AppEvent, EventHandler};
+use crate::git::Repository;
 use anyhow::Result;
 use ratatui::{
     backend::CrosstermBackend,
@@ -10,11 +11,13 @@ use std::io::Stdout;
 
 pub struct App {
     running: bool,
+    #[allow(dead_code)]
+    repo: Repository,
 }
 
 impl App {
-    pub fn new() -> Self {
-        Self { running: true }
+    pub fn new(repo: Repository) -> Self {
+        Self { running: true, repo }
     }
 
     pub fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> Result<()> {
@@ -43,11 +46,5 @@ impl App {
         if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Char('c') {
             self.running = false;
         }
-    }
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self::new()
     }
 }

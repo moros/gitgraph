@@ -5,6 +5,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use gitpeek::git::LogOrder;
 use std::io;
 use std::panic;
 
@@ -81,7 +82,12 @@ fn restore_terminal(
 }
 
 fn main() -> Result<()> {
-    let _args = Cli::parse();
+    let args = Cli::parse();
+
+    let order = match args.order {
+        Order::Chrono => LogOrder::Chronological,
+        Order::Topo => LogOrder::Topological,
+    };
 
     // Install panic hook to restore terminal before printing panic info
     let original_hook = panic::take_hook();
@@ -92,7 +98,7 @@ fn main() -> Result<()> {
     }));
 
     let mut terminal = setup_terminal()?;
-    let result = gitpeek::run(&mut terminal);
+    let result = gitpeek::run(&mut terminal, order);
     restore_terminal(&mut terminal)?;
     result
 }
