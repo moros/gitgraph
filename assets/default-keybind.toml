@@ -1,0 +1,51 @@
+# gitpeek default keybindings
+#
+# Format: action_name = ["key1", "key2", ...]
+#
+# Modifiers: ctrl-, alt-, shift-  (e.g., "ctrl-c", "alt-j", "shift-G")
+# Special keys: esc, enter, space, tab, backspace, delete, insert,
+#   home, end, pageup, pagedown, up, down, left, right, f1-f12
+#
+# NOTE: Detail-view-specific bindings (scroll_diff_*, toggle_directory,
+# collapse_directory, next_commit, prev_commit) are handled by the detail
+# view directly, since some keys overlap with list-view bindings.
+# Refs-view bindings are similarly handled in the refs view.
+
+[keybind]
+
+# ── Global ───────────────────────────────────────────────────────────────
+quit           = ["q"]
+force_quit     = ["ctrl-c"]
+help_toggle    = ["?"]
+cancel         = ["esc"]
+refresh        = ["shift-R"]
+
+# ── Navigation (shared across list / detail) ──────────────────────────────
+navigate_down  = ["j", "down"]
+navigate_up    = ["k", "up"]
+go_to_top      = ["g"]
+go_to_bottom   = ["shift-G"]
+select_top     = ["shift-H"]
+select_middle  = ["shift-M"]
+select_bottom  = ["shift-L"]
+half_page_down = ["ctrl-d"]
+half_page_up   = ["ctrl-u"]
+page_down      = ["ctrl-f", "pagedown", "space"]
+page_up        = ["ctrl-b", "pageup"]
+scroll_down    = ["ctrl-e"]
+scroll_up      = ["ctrl-y"]
+select_down    = ["shift-J"]
+select_up      = ["shift-K"]
+
+# ── List view ─────────────────────────────────────────────────────────────
+confirm             = ["enter"]
+open_refs           = ["tab"]
+search_start        = ["/"]
+search_next         = ["n"]
+search_prev         = ["shift-N"]
+search_toggle_case  = ["ctrl-g"]
+search_toggle_fuzzy = ["ctrl-x"]
+jump_to_parent      = ["alt-j"]
+copy_short_hash     = ["c"]
+copy_full_hash      = ["shift-C"]
+user_command        = ["d"]
