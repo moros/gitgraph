@@ -448,6 +448,7 @@ mod tests {
             .map(|(hash, parents)| Commit {
                 hash: CommitHash::from(*hash),
                 parent_hashes: parents.iter().map(|p| CommitHash::from(*p)).collect(),
+                ..Default::default()
             })
             .collect();
 
