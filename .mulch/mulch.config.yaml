@@ -1,6 +1,7 @@
 version: '1'
 domains:
   - spec
+  - gitpeek
 governance:
   max_entries: 100
   warn_entries: 150
