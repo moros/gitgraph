@@ -2,7 +2,7 @@
 
 use crate::config::{Config, GraphWidth, InitialSelection};
 use crate::event::{AppEvent, EventHandler, Sender};
-use crate::git::{Head, Repository};
+use crate::git::{Head, Ref, Repository};
 use crate::graph::Graph;
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::view::View;
@@ -56,6 +56,8 @@ pub struct App {
     tx: Sender,
     /// Saved list state when the detail view is open, restored on CloseDetail.
     saved_list_state: Option<CommitListState>,
+    /// All refs collected from the repository, passed to RefsView on Tab.
+    all_refs: Vec<Ref>,
 }
 
 impl App {
@@ -128,6 +130,8 @@ impl App {
             }
         }
 
+        let all_refs: Vec<Ref> = repo.all_refs().into_iter().cloned().collect();
+
         let view = View::of_list(commit_list_state, config.clone(), tx.clone());
 
         Self {
@@ -136,6 +140,7 @@ impl App {
             app_status: AppStatus::default(),
             tx,
             saved_list_state: None,
+            all_refs,
         }
     }
 
@@ -238,8 +243,20 @@ impl App {
                     self.navigate_detail_prev();
                 }
                 AppEvent::OpenRefs => {
-                    self.app_status.status_line =
-                        StatusLine::NotificationInfo("Refs view not yet implemented".to_string());
+                    if let Some(list_state) = self.view.take_list_state() {
+                        self.view = View::of_refs(
+                            list_state,
+                            self.all_refs.clone(),
+                            self.config.clone(),
+                            self.tx.clone(),
+                        );
+                    }
+                }
+                AppEvent::CloseRefs => {
+                    if let Some(list_state) = self.view.take_list_state() {
+                        self.view =
+                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                    }
                 }
                 AppEvent::OpenHelp => {
                     self.app_status.status_line =

@@ -14,6 +14,8 @@ pub enum AppEvent {
     OpenHelp,
     /// Close the detail view and return to the list view.
     CloseDetail,
+    /// Close the refs view and return to the list view.
+    CloseRefs,
     /// Navigate to the next commit while staying in detail view.
     DetailNextCommit,
     /// Navigate to the previous commit while staying in detail view.

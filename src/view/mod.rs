@@ -1,8 +1,10 @@
 pub mod detail;
 pub mod list;
+pub mod refs;
 
 use crate::config::Config;
 use crate::event::Sender;
+use crate::git::Ref;
 use crate::keybind::UserEventWithCount;
 use crate::widget::commit_list::{CommitInfo, CommitListState};
 use crossterm::event::KeyEvent;
@@ -15,6 +17,7 @@ pub enum View {
     Default,
     List(Box<list::ListView>),
     Detail(Box<detail::DetailView>),
+    Refs(Box<refs::RefsView>),
 }
 
 impl View {
@@ -23,6 +26,7 @@ impl View {
             View::Default => {}
             View::List(view) => view.handle_event(ewc, key),
             View::Detail(view) => view.handle_event(ewc, key),
+            View::Refs(view) => view.handle_event(ewc, key),
         }
     }
 
@@ -31,6 +35,7 @@ impl View {
             View::Default => {}
             View::List(view) => view.render(f, area),
             View::Detail(view) => view.render(f, area),
+            View::Refs(view) => view.render(f, area),
         }
     }
 
@@ -60,9 +65,24 @@ impl View {
         )))
     }
 
+    pub fn of_refs(
+        commit_list_state: CommitListState,
+        all_refs: Vec<Ref>,
+        config: Rc<Config>,
+        tx: Sender,
+    ) -> Self {
+        View::Refs(Box::new(refs::RefsView::new(
+            commit_list_state,
+            all_refs,
+            config,
+            tx,
+        )))
+    }
+
     pub fn take_list_state(&mut self) -> Option<CommitListState> {
         match self {
             View::List(view) => view.take_list_state(),
+            View::Refs(view) => view.take_list_state(),
             _ => None,
         }
     }
