@@ -2,6 +2,7 @@ pub mod app;
 pub mod event;
 pub mod git;
 pub mod graph;
+pub mod protocol;
 pub mod tree;
 pub mod view;
 pub mod widget;

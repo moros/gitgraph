@@ -1,6 +1,7 @@
 // Lane-based graph layout algorithm and 2D geometry for the gitpeek commit graph.
 pub mod calc;
 pub mod geometry;
+pub mod image;
 
 use std::collections::HashMap;
 
