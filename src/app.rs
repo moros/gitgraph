@@ -1,10 +1,13 @@
 //! Application state machine, event loop, and rendering.
 
-use crate::config::{Config, GraphWidth, InitialSelection};
+use crate::config::{Config, GraphWidth, InitialSelection, Protocol};
 use crate::event::{AppEvent, EventHandler, Sender};
 use crate::git::{CommitHash, Head, Ref, Repository};
+use crate::graph::image::{CellWidthType, GraphImageManager, GraphStyle as ImageGraphStyle, ImageColors};
 use crate::graph::{render_text_row, Graph};
 use crate::keybind::{UserEvent, UserEventWithCount};
+use crate::protocol::ImageProtocol;
+use crate::theme::ThemeColor;
 use crate::view::View;
 use crate::widget::commit_list::{CommitInfo, CommitListState};
 use ratatui::{
@@ -92,6 +95,47 @@ impl App {
 
         let mut ref_name_to_commit_index_map: FxHashMap<String, usize> = FxHashMap::default();
 
+        // Build image manager for image-capable terminals (preloads all rows up front).
+        let image_manager: Option<GraphImageManager> = if !use_text_graph {
+            let branch_colors: Vec<image::Rgba<u8>> = config
+                .graph
+                .color
+                .branches
+                .iter()
+                .map(theme_color_to_rgba)
+                .collect();
+            let edge_color = theme_color_to_rgba(&config.graph.color.edge);
+            let bg_color = theme_color_to_rgba(&config.graph.color.background);
+            let image_colors = ImageColors::new(branch_colors, edge_color, bg_color);
+
+            let cell_width_type = match config.core.graph_width {
+                GraphWidth::Single => CellWidthType::Single,
+                _ => CellWidthType::Double,
+            };
+
+            let image_graph_style = match config.core.graph_style {
+                crate::config::GraphStyle::Rounded => ImageGraphStyle::Rounded,
+                crate::config::GraphStyle::Angular => ImageGraphStyle::Angular,
+            };
+
+            let image_protocol = match config.core.protocol {
+                Protocol::Auto => crate::protocol::auto_detect(),
+                Protocol::Iterm => ImageProtocol::Iterm2,
+                Protocol::Kitty => ImageProtocol::Kitty,
+            };
+
+            Some(GraphImageManager::new(
+                graph,
+                &image_colors,
+                cell_width_type,
+                image_graph_style,
+                image_protocol,
+                true,
+            ))
+        } else {
+            None
+        };
+
         let commits: Vec<CommitInfo> = graph
             .commits
             .iter()
@@ -120,7 +164,10 @@ impl App {
                 let graph_line = if use_text_graph {
                     render_text_row(graph, hash)
                 } else {
-                    String::new()
+                    image_manager
+                        .as_ref()
+                        .map(|m| m.encoded_image(hash).to_string())
+                        .unwrap_or_default()
                 };
                 CommitInfo {
                     commit,
@@ -237,10 +284,10 @@ impl App {
                 AppEvent::Refresh => {
                     let hash = if let Some(ls) = self.view.take_list_state() {
                         Some(ls.selected_commit_hash().clone())
-                    } else if let Some(ls) = &self.saved_list_state {
-                        Some(ls.selected_commit_hash().clone())
                     } else {
-                        None
+                        self.saved_list_state
+                            .as_ref()
+                            .map(|ls| ls.selected_commit_hash().clone())
                     };
                     return Ok(RunResult::Refresh(hash));
                 }
@@ -467,6 +514,35 @@ impl App {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/// Convert a [`ThemeColor`] to an RGBA pixel value for image rendering.
+///
+/// - `Color::Rgb(r,g,b)` → opaque pixel
+/// - `Color::Reset` (transparent) → alpha=0
+/// - Named/indexed colors → approximate standard terminal RGB values
+fn theme_color_to_rgba(tc: &ThemeColor) -> image::Rgba<u8> {
+    match tc.0 {
+        Color::Rgb(r, g, b) => image::Rgba([r, g, b, 255]),
+        Color::Reset => image::Rgba([0, 0, 0, 0]),
+        Color::Black => image::Rgba([0, 0, 0, 255]),
+        Color::Red => image::Rgba([170, 0, 0, 255]),
+        Color::Green => image::Rgba([0, 170, 0, 255]),
+        Color::Yellow => image::Rgba([170, 85, 0, 255]),
+        Color::Blue => image::Rgba([0, 0, 170, 255]),
+        Color::Magenta => image::Rgba([170, 0, 170, 255]),
+        Color::Cyan => image::Rgba([0, 170, 170, 255]),
+        Color::Gray => image::Rgba([170, 170, 170, 255]),
+        Color::DarkGray => image::Rgba([85, 85, 85, 255]),
+        Color::LightRed => image::Rgba([255, 85, 85, 255]),
+        Color::LightGreen => image::Rgba([85, 255, 85, 255]),
+        Color::LightYellow => image::Rgba([255, 255, 85, 255]),
+        Color::LightBlue => image::Rgba([85, 85, 255, 255]),
+        Color::LightMagenta => image::Rgba([255, 85, 255, 255]),
+        Color::LightCyan => image::Rgba([85, 255, 255, 255]),
+        Color::White => image::Rgba([255, 255, 255, 255]),
+        Color::Indexed(_) => image::Rgba([255, 255, 255, 255]),
+    }
+}
 
 fn process_numeric_prefix(numeric_prefix: &str, user_event: UserEvent) -> UserEventWithCount {
     if user_event.is_countable() {

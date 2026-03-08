@@ -88,6 +88,8 @@ pub struct DetailView {
     diff_scroll_y: u16,
     /// Horizontal scroll offset for the diff pane (in columns).
     diff_scroll_x: u16,
+    /// Vertical scroll offset for the commit metadata (body) in the header.
+    metadata_scroll_y: u16,
     config: Rc<Config>,
     tx: Sender,
 }
@@ -118,6 +120,7 @@ impl DetailView {
             selected_file: 0,
             diff_scroll_y: 0,
             diff_scroll_x: 0,
+            metadata_scroll_y: 0,
             config,
             tx,
         }
@@ -148,6 +151,35 @@ impl DetailView {
                     self.selected_file = self.file_changes.len() - 1;
                     self.invalidate_diff();
                 }
+            }
+            UserEvent::ScrollDown => {
+                if self.file_changes.is_empty() {
+                    let total = self.commit_info.commit.body.lines().count() as u16;
+                    let max_scroll = total.saturating_sub(5);
+                    self.metadata_scroll_y =
+                        self.metadata_scroll_y.saturating_add(count).min(max_scroll);
+                } else {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_add(count);
+                }
+            }
+            UserEvent::ScrollUp => {
+                if self.file_changes.is_empty() {
+                    self.metadata_scroll_y = self.metadata_scroll_y.saturating_sub(count);
+                } else {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count);
+                }
+            }
+            UserEvent::HalfPageDown => {
+                self.diff_scroll_y = self.diff_scroll_y.saturating_add(count * 10);
+            }
+            UserEvent::HalfPageUp => {
+                self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count * 10);
+            }
+            UserEvent::PageDown => {
+                self.diff_scroll_y = self.diff_scroll_y.saturating_add(count * 20);
+            }
+            UserEvent::PageUp => {
+                self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count * 20);
             }
             UserEvent::ScrollDiffDown => {
                 self.diff_scroll_y = self.diff_scroll_y.saturating_add(count);
@@ -211,16 +243,12 @@ impl DetailView {
     // ── Private helpers ────────────────────────────────────────────────────
 
     fn header_height(&self) -> u16 {
-        // border top + author + date + hash + subject + body lines + border bottom
-        let body_line_count = self
-            .commit_info
-            .commit
-            .body
-            .lines()
-            .count()
-            .min(5) as u16;
-        // author/committer row + date row + hash row + subject row + body rows
-        4 + body_line_count + 2 // +2 for top/bottom borders
+        // border top + author + date + hash + subject + body lines + indicator + border bottom
+        let body_count = self.commit_info.commit.body.lines().count();
+        let visible = body_count.min(5) as u16;
+        let indicator = if body_count > 5 { 1u16 } else { 0 };
+        // author/committer row + date row + hash row + subject row + body rows + indicator
+        4 + visible + indicator + 2 // +2 for top/bottom borders
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
@@ -283,8 +311,23 @@ impl DetailView {
         // Body
         if !commit.body.is_empty() {
             lines.push(Line::raw(""));
-            for body_line in commit.body.lines().take(5) {
+            let total_body_lines = commit.body.lines().count();
+            let max_visible = 5usize;
+            for body_line in commit
+                .body
+                .lines()
+                .skip(self.metadata_scroll_y as usize)
+                .take(max_visible)
+            {
                 lines.push(Line::raw(format!("    {body_line}")));
+            }
+            let remaining = total_body_lines
+                .saturating_sub(self.metadata_scroll_y as usize + max_visible);
+            if remaining > 0 {
+                lines.push(Line::styled(
+                    format!("    ... {remaining} more lines"),
+                    Style::default().fg(theme.border.0),
+                ));
             }
         }
 
