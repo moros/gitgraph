@@ -443,7 +443,7 @@ pub fn format_key_event(key: &KeyEvent) -> String {
         KeyCode::Left => s.push_str("left"),
         KeyCode::Right => s.push_str("right"),
         KeyCode::F(n) => s.push_str(&format!("f{n}")),
-        _ => s.push_str("?"),
+        _ => s.push('?'),
     }
     s
 }

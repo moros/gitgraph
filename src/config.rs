@@ -100,7 +100,7 @@ impl Config {
 // CoreConfig
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct CoreConfig {
     /// Git log ordering strategy.
@@ -117,22 +117,6 @@ pub struct CoreConfig {
     pub external: ExternalConfig,
     pub diff: DiffConfig,
     pub user_command: UserCommandConfig,
-}
-
-impl Default for CoreConfig {
-    fn default() -> Self {
-        Self {
-            order: OrderType::default(),
-            graph_width: GraphWidth::default(),
-            graph_style: GraphStyle::default(),
-            initial_selection: InitialSelection::default(),
-            protocol: Protocol::default(),
-            search: SearchConfig::default(),
-            external: ExternalConfig::default(),
-            diff: DiffConfig::default(),
-            user_command: UserCommandConfig::default(),
-        }
-    }
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -181,20 +165,11 @@ pub enum Protocol {
 
 // ── Search ─────────────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct SearchConfig {
     pub ignore_case: bool,
     pub fuzzy: bool,
-}
-
-impl Default for SearchConfig {
-    fn default() -> Self {
-        Self {
-            ignore_case: false,
-            fuzzy: false,
-        }
-    }
 }
 
 // ── External ───────────────────────────────────────────────────────────────
@@ -328,24 +303,13 @@ impl Default for UserCommandConfig {
 // UiConfig
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct UiConfig {
     pub list: ListUiConfig,
     pub detail: DetailUiConfig,
     pub refs: RefsUiConfig,
     pub common: CommonUiConfig,
-}
-
-impl Default for UiConfig {
-    fn default() -> Self {
-        Self {
-            list: ListUiConfig::default(),
-            detail: DetailUiConfig::default(),
-            refs: RefsUiConfig::default(),
-            common: CommonUiConfig::default(),
-        }
-    }
 }
 
 // ── List view ──────────────────────────────────────────────────────────────
@@ -448,18 +412,10 @@ impl Default for CommonUiConfig {
 // GraphConfig
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct GraphConfig {
     pub color: GraphColorSet,
-}
-
-impl Default for GraphConfig {
-    fn default() -> Self {
-        Self {
-            color: GraphColorSet::default(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------

@@ -49,9 +49,8 @@ impl View {
 
     /// Forward a raw key event when no UserEvent mapped (for search input mode).
     pub fn raw_key_input(&mut self, key: KeyEvent) {
-        match self {
-            View::List(view) => view.raw_key_input(key),
-            _ => {}
+        if let View::List(view) = self {
+            view.raw_key_input(key);
         }
     }
 
@@ -124,9 +123,8 @@ impl View {
     }
 
     pub fn give_list_state(&mut self, state: CommitListState) {
-        match self {
-            View::List(view) => view.give_list_state(state),
-            _ => {}
+        if let View::List(view) = self {
+            view.give_list_state(state);
         }
     }
 

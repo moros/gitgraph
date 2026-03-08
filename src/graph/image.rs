@@ -572,7 +572,7 @@ fn calc_corner_edge_drawing_pixels(
     let curve_center_y = base_center_y;
     let line_width = image_params.line_width as i32;
     let half_line_width = line_width / 2;
-    let adjust = if image_params.line_width % 2 == 0 { 0 } else { 1 };
+    let adjust = if image_params.line_width.is_multiple_of(2) { 0 } else { 1 };
     let radius_base_length = image_params.corner_radius() as i32;
     let inner_radius = radius_base_length - half_line_width - adjust;
     let outer_radius = radius_base_length + half_line_width;
