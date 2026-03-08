@@ -243,12 +243,15 @@ impl DetailView {
     // ── Private helpers ────────────────────────────────────────────────────
 
     fn header_height(&self) -> u16 {
-        // border top + author + date + hash + subject + body lines + indicator + border bottom
+        // hash + author + date + blank separator + subject = 5 base lines
+        let base = 5u16;
+        let refs_line = if !self.commit_info.refs.is_empty() { 1u16 } else { 0 };
         let body_count = self.commit_info.commit.body.lines().count();
         let visible = body_count.min(5) as u16;
         let indicator = if body_count > 5 { 1u16 } else { 0 };
-        // author/committer row + date row + hash row + subject row + body rows + indicator
-        4 + visible + indicator + 2 // +2 for top/bottom borders
+        // +1 blank line before body when body is present
+        let body_lines = if body_count > 0 { 1 + visible + indicator } else { 0 };
+        base + refs_line + body_lines + 2 // +2 for top/bottom borders
     }
 
     fn render_header(&self, f: &mut Frame, area: Rect) {
