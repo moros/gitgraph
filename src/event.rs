@@ -31,6 +31,8 @@ pub enum AppEvent {
     NotifyWarn(String),
     NotifyError(String),
     NotifySuccess(String),
+    /// Reload repository data while preserving user context.
+    Refresh,
 }
 
 #[derive(Clone)]

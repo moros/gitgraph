@@ -2,8 +2,8 @@
 
 use crate::config::{Config, GraphWidth, InitialSelection};
 use crate::event::{AppEvent, EventHandler, Sender};
-use crate::git::{Head, Ref, Repository};
-use crate::graph::Graph;
+use crate::git::{CommitHash, Head, Ref, Repository};
+use crate::graph::{render_text_row, Graph};
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::view::View;
 use crate::widget::commit_list::{CommitInfo, CommitListState};
@@ -18,6 +18,19 @@ use ratatui::{
 use rustc_hash::FxHashMap;
 use std::io::Stdout;
 use std::rc::Rc;
+
+// ---------------------------------------------------------------------------
+// RunResult
+// ---------------------------------------------------------------------------
+
+/// Outcome of `App::run`.
+pub enum RunResult {
+    /// The user quit the application.
+    Quit,
+    /// The user requested a data refresh; the inner value is the currently
+    /// selected commit hash (used to restore context after reload).
+    Refresh(Option<CommitHash>),
+}
 
 // ---------------------------------------------------------------------------
 // StatusLine
@@ -66,6 +79,8 @@ impl App {
         graph: &Graph,
         config: Rc<Config>,
         tx: Sender,
+        restore_hash: Option<&CommitHash>,
+        use_text_graph: bool,
     ) -> Self {
         // Build CommitInfo for each commit in display order
         let branches = &config.graph.color.branches;
@@ -102,11 +117,16 @@ impl App {
                     branches[color_index % branches.len()].0
                 };
 
+                let graph_line = if use_text_graph {
+                    render_text_row(graph, hash)
+                } else {
+                    String::new()
+                };
                 CommitInfo {
                     commit,
                     refs,
                     graph_color,
-                    graph_line: String::new(), // populated by image renderer in Phase 3C
+                    graph_line,
                 }
             })
             .collect();
@@ -121,8 +141,10 @@ impl App {
             config.core.search.fuzzy,
         );
 
-        // Apply initial selection
-        if let InitialSelection::Head = config.core.initial_selection {
+        // Apply initial selection: prefer restore_hash (from refresh), then config.
+        if let Some(hash) = restore_hash {
+            commit_list_state.select_commit_hash(hash);
+        } else if let InitialSelection::Head = config.core.initial_selection {
             match repo.head() {
                 Head::Branch { name } => commit_list_state.select_ref(name),
                 Head::Detached { target } => commit_list_state.select_commit_hash(target),
@@ -148,7 +170,7 @@ impl App {
         &mut self,
         terminal: &mut Terminal<CrosstermBackend<Stdout>>,
         events: &EventHandler,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<RunResult> {
         loop {
             terminal.draw(|f| self.render(f))?;
 
@@ -179,7 +201,7 @@ impl App {
                     }
 
                     match user_event {
-                        Some(UserEvent::ForceQuit) => break,
+                        Some(UserEvent::ForceQuit) => return Ok(RunResult::Quit),
                         Some(ue) => {
                             let ewc = process_numeric_prefix(&self.app_status.numeric_prefix, ue);
                             self.view.handle_event(ewc, key);
@@ -207,10 +229,21 @@ impl App {
                     }
                 }
 
-                AppEvent::Resize(_, _) => {}
+                AppEvent::Resize(_, _) => continue,
                 AppEvent::Tick => {}
 
-                AppEvent::Quit => break,
+                AppEvent::Quit => return Ok(RunResult::Quit),
+
+                AppEvent::Refresh => {
+                    let hash = if let Some(ls) = self.view.take_list_state() {
+                        Some(ls.selected_commit_hash().clone())
+                    } else if let Some(ls) = &self.saved_list_state {
+                        Some(ls.selected_commit_hash().clone())
+                    } else {
+                        None
+                    };
+                    return Ok(RunResult::Refresh(hash));
+                }
 
                 AppEvent::OpenDetail => {
                     if let Some(list_state) = self.view.take_list_state() {
@@ -315,8 +348,6 @@ impl App {
                 }
             }
         }
-
-        Ok(())
     }
 
     fn render(&mut self, f: &mut Frame) {
