@@ -46,6 +46,18 @@ impl ImageProtocol {
             ImageProtocol::Kitty => kitty_clear_line(y),
         }
     }
+
+    /// Clear all inline images from the terminal graphics layer.
+    ///
+    /// For Kitty, emits `a=d,d=A` to delete every placed image.
+    /// For iTerm2, images are part of the cell buffer and will be overwritten
+    /// by ratatui on the next draw; no explicit clear is needed.
+    pub fn clear_all(&self) {
+        match self {
+            ImageProtocol::Iterm2 => {}
+            ImageProtocol::Kitty => kitty_clear_all(),
+        }
+    }
 }
 
 fn to_base64_str(bytes: &[u8]) -> String {
@@ -94,6 +106,13 @@ fn kitty_encode(bytes: &[u8], cell_width: usize, cell_height: usize) -> String {
 fn kitty_clear_line(y: u16) {
     let y = y + 1; // 1-based
     print!("\x1b_Ga=d,d=Y,y={y};\x1b\\");
+}
+
+fn kitty_clear_all() {
+    use std::io::Write;
+    let mut stdout = std::io::stdout();
+    let _ = write!(stdout, "\x1b_Ga=d,d=A;\x1b\\");
+    let _ = stdout.flush();
 }
 
 #[cfg(test)]

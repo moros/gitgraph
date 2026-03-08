@@ -74,6 +74,9 @@ pub struct App {
     saved_list_state: Option<CommitListState>,
     /// All refs collected from the repository, passed to RefsView on Tab.
     all_refs: Vec<Ref>,
+    /// Image protocol in use (None when rendering text graph).
+    /// Used to clear the graphics layer when transitioning between views.
+    image_protocol: Option<ImageProtocol>,
 }
 
 impl App {
@@ -129,9 +132,20 @@ impl App {
                 &image_colors,
                 cell_width_type,
                 image_graph_style,
-                image_protocol,
+                image_protocol, // ImageProtocol is Copy
                 true,
             ))
+        } else {
+            None
+        };
+
+        // Capture the protocol for later use in clear_images().
+        let image_protocol: Option<ImageProtocol> = if !use_text_graph {
+            Some(match config.core.protocol {
+                Protocol::Auto => crate::protocol::auto_detect(),
+                Protocol::Iterm => ImageProtocol::Iterm2,
+                Protocol::Kitty => ImageProtocol::Kitty,
+            })
         } else {
             None
         };
@@ -210,6 +224,7 @@ impl App {
             tx,
             saved_list_state: None,
             all_refs,
+            image_protocol,
         }
     }
 
@@ -298,6 +313,7 @@ impl App {
                         if idx < list_state.commits.len() {
                             let commit_info = list_state.commits[idx].clone();
                             self.saved_list_state = Some(list_state);
+                            self.clear_images();
                             self.view = View::of_detail(
                                 commit_info,
                                 idx,
@@ -312,6 +328,7 @@ impl App {
                 }
                 AppEvent::CloseDetail => {
                     if let Some(list_state) = self.saved_list_state.take() {
+                        self.clear_images();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
@@ -324,6 +341,7 @@ impl App {
                 }
                 AppEvent::OpenRefs => {
                     if let Some(list_state) = self.view.take_list_state() {
+                        self.clear_images();
                         self.view = View::of_refs(
                             list_state,
                             self.all_refs.clone(),
@@ -334,15 +352,18 @@ impl App {
                 }
                 AppEvent::CloseRefs => {
                     if let Some(list_state) = self.view.take_list_state() {
+                        self.clear_images();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
                 }
                 AppEvent::OpenHelp => {
+                    self.clear_images();
                     let before = std::mem::take(&mut self.view);
                     self.view = View::of_help(before, self.config.clone(), self.tx.clone());
                 }
                 AppEvent::CloseHelp => {
+                    self.clear_images();
                     let current = std::mem::take(&mut self.view);
                     if let Some(before) = current.take_help_before() {
                         self.view = before;
@@ -357,6 +378,7 @@ impl App {
                     } else {
                         continue;
                     };
+                    self.clear_images();
                     self.view = View::of_user_command(
                         list_state,
                         slot,
@@ -366,6 +388,7 @@ impl App {
                 }
                 AppEvent::CloseUserCommand => {
                     if let Some(list_state) = self.view.take_list_state() {
+                        self.clear_images();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
@@ -494,6 +517,16 @@ impl App {
                     self.view = View::of_detail(commit_info, new_idx, config, tx);
                 }
             }
+        }
+    }
+
+    /// Clear all terminal inline images from the graphics layer.
+    ///
+    /// Must be called before transitioning away from the list view so that
+    /// graph images do not bleed through into detail/refs/help views.
+    fn clear_images(&self) {
+        if let Some(protocol) = &self.image_protocol {
+            protocol.clear_all();
         }
     }
 
