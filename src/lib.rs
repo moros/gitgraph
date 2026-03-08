@@ -5,6 +5,7 @@ pub mod event;
 pub mod git;
 pub mod graph;
 pub mod keybind;
+pub mod protocol;
 pub mod theme;
 pub mod tree;
 pub mod view;
