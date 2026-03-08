@@ -61,6 +61,16 @@ cargo install --path .
 
 The binary is named `gg`.
 
+> **Note for Oh My Zsh users:** The [git plugin](https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/git) aliases `gg` to `git gui citool`, which shadows this binary. To fix this, add one of the following to your `~/.zshrc` **after** `source $ZSH/oh-my-zsh.sh`:
+>
+> ```bash
+> # Option 1: Remove the alias so the cargo-installed gg binary is used
+> unalias gg 2>/dev/null
+>
+> # Option 2: Define your own alias
+> alias gg='/path/to/.cargo/bin/gg'
+> ```
+
 ## Usage
 
 ```bash
