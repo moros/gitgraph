@@ -75,10 +75,10 @@ impl DiffViewerState {
                     DiffLine::HunkHeader(line.to_string())
                 } else if line.starts_with("diff ") || line.starts_with("---") || line.starts_with("+++") || line.starts_with("index ") {
                     DiffLine::Header(line.to_string())
-                } else if line.starts_with('+') {
-                    DiffLine::Added(line[1..].to_string())
-                } else if line.starts_with('-') {
-                    DiffLine::Removed(line[1..].to_string())
+                } else if let Some(stripped) = line.strip_prefix('+') {
+                    DiffLine::Added(stripped.to_string())
+                } else if let Some(stripped) = line.strip_prefix('-') {
+                    DiffLine::Removed(stripped.to_string())
                 } else if line.is_empty() {
                     DiffLine::Empty
                 } else {
@@ -255,5 +255,72 @@ mod tests {
         state.clear();
         assert!(state.lines.is_empty());
         assert!(state.filename.is_empty());
+    }
+
+    #[test]
+    fn added_and_removed_lines_strip_prefix() {
+        let diff = "+added content\n-removed content\n context line";
+        let mut state = DiffViewerState::default();
+        state.set_content("f.rs", diff);
+
+        match &state.lines[0] {
+            DiffLine::Added(s) => assert_eq!(s, "added content"),
+            other => panic!("expected Added, got {other:?}"),
+        }
+        match &state.lines[1] {
+            DiffLine::Removed(s) => assert_eq!(s, "removed content"),
+            other => panic!("expected Removed, got {other:?}"),
+        }
+        match &state.lines[2] {
+            DiffLine::Context(s) => assert_eq!(s, " context line"),
+            other => panic!("expected Context, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn header_lines_detected_correctly() {
+        let diff = "diff --git a/x b/x\n--- a/x\n+++ b/x\nindex 000..fff 100644";
+        let mut state = DiffViewerState::default();
+        state.set_content("x", diff);
+        assert_eq!(state.lines.len(), 4);
+        assert!(matches!(state.lines[0], DiffLine::Header(_)));
+        assert!(matches!(state.lines[1], DiffLine::Header(_)));
+        assert!(matches!(state.lines[2], DiffLine::Header(_)));
+        assert!(matches!(state.lines[3], DiffLine::Header(_)));
+    }
+
+    #[test]
+    fn hunk_header_detected() {
+        let diff = "@@ -1,3 +1,4 @@ fn foo()";
+        let mut state = DiffViewerState::default();
+        state.set_content("x", diff);
+        assert!(matches!(state.lines[0], DiffLine::HunkHeader(_)));
+    }
+
+    #[test]
+    fn empty_lines_become_empty_variant() {
+        let diff = "+added\n\n-removed";
+        let mut state = DiffViewerState::default();
+        state.set_content("f.rs", diff);
+        assert!(matches!(state.lines[1], DiffLine::Empty));
+    }
+
+    #[test]
+    fn scroll_right_and_left() {
+        let mut state = DiffViewerState::default();
+        state.scroll_right(5);
+        assert_eq!(state.horizontal_offset, 5);
+        state.scroll_left(3);
+        assert_eq!(state.horizontal_offset, 2);
+        state.scroll_left(100);
+        assert_eq!(state.horizontal_offset, 0);
+    }
+
+    #[test]
+    fn set_content_empty_string() {
+        let mut state = DiffViewerState::default();
+        state.set_content("empty.rs", "");
+        assert!(state.lines.is_empty());
+        assert_eq!(state.filename, "empty.rs");
     }
 }

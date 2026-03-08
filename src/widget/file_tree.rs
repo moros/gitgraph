@@ -132,7 +132,7 @@ impl FileTreeState {
 }
 
 fn mutate_node_by_path(
-    nodes: &mut Vec<FileTreeNode>,
+    nodes: &mut [FileTreeNode],
     full_path: &str,
     f: &mut dyn FnMut(&mut FileTreeNode),
 ) -> bool {
@@ -148,7 +148,7 @@ fn mutate_node_by_path(
     false
 }
 
-fn collapse_node_by_path(nodes: &mut Vec<FileTreeNode>, full_path: &str) -> bool {
+fn collapse_node_by_path(nodes: &mut [FileTreeNode], full_path: &str) -> bool {
     for node in nodes.iter_mut() {
         if node.full_path == full_path && node.is_dir {
             node.expanded = false;

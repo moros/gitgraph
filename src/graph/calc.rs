@@ -88,7 +88,7 @@ fn set_lane(lane_state: &mut Vec<Option<CommitHash>>, x: usize, value: Option<Co
 /// Clear all lanes held by `child_hashes`, then place `commit_hash` in the
 /// leftmost freed lane. Returns that lane index.
 fn update_lane(
-    lane_state: &mut Vec<Option<CommitHash>>,
+    lane_state: &mut [Option<CommitHash>],
     commit_hash: &CommitHash,
     child_hashes: &[&CommitHash],
 ) -> usize {
@@ -277,7 +277,7 @@ fn calc_edges(
 // ---------------------------------------------------------------------------
 
 fn push_edge(
-    pending: &mut Vec<Vec<PendingEdge>>,
+    pending: &mut [Vec<PendingEdge>],
     row: usize,
     edge_type: EdgeType,
     pos_x: usize,
@@ -290,7 +290,7 @@ fn push_edge(
 /// Draw horizontal + corner edges for a branch that changes lanes.
 /// `pos` = parent position, `child_pos` = child (branch start) position.
 fn draw_branch_edges(
-    pending: &mut Vec<Vec<PendingEdge>>,
+    pending: &mut [Vec<PendingEdge>],
     pos: Position,
     child_pos: Position,
     owner: &CommitHash,
@@ -379,7 +379,7 @@ fn find_merge_overlap(
 
 /// Draw a direct (no-detour) merge edge from `pos` up to `child_pos`.
 fn draw_merge_direct_edges(
-    pending: &mut Vec<Vec<PendingEdge>>,
+    pending: &mut [Vec<PendingEdge>],
     pos: Position,
     child_pos: Position,
     owner: &CommitHash,
@@ -405,7 +405,7 @@ fn draw_merge_direct_edges(
 
 /// Draw a detoured merge edge that steps right to `new_pos_x` to avoid overlap.
 fn draw_merge_detour_edges(
-    pending: &mut Vec<Vec<PendingEdge>>,
+    pending: &mut [Vec<PendingEdge>],
     pos: Position,
     child_pos: Position,
     new_pos_x: usize,
@@ -531,6 +531,97 @@ mod tests {
             let mut sorted = xs.clone();
             sorted.dedup();
             assert_eq!(sorted.len(), xs.len());
+        }
+    }
+
+    #[test]
+    fn test_commit_ordering_newest_first() {
+        // Graph commits list must preserve the input order (newest-first).
+        let repo = make_repo(vec![
+            ("C3", vec!["C2"]),
+            ("C2", vec!["C1"]),
+            ("C1", vec![]),
+        ]);
+        let graph = calc_graph(&repo);
+
+        assert_eq!(graph.commits[0], CommitHash::from("C3"));
+        assert_eq!(graph.commits[1], CommitHash::from("C2"));
+        assert_eq!(graph.commits[2], CommitHash::from("C1"));
+
+        // Positions must reflect order: row 0 = newest.
+        assert_eq!(graph.commit_pos_map[&CommitHash::from("C3")].y, 0);
+        assert_eq!(graph.commit_pos_map[&CommitHash::from("C1")].y, 2);
+    }
+
+    #[test]
+    fn test_single_commit() {
+        let repo = make_repo(vec![("ROOT", vec![])]);
+        let graph = calc_graph(&repo);
+        assert_eq!(graph.commits.len(), 1);
+        assert_eq!(graph.max_pos_x, 0);
+        let pos = graph.commit_pos_map[&CommitHash::from("ROOT")];
+        assert_eq!(pos.x, 0);
+        assert_eq!(pos.y, 0);
+    }
+
+    #[test]
+    fn test_edges_non_empty_for_connected_graph() {
+        // A two-commit linear graph must produce edges connecting them.
+        let repo = make_repo(vec![("HEAD", vec!["BASE"]), ("BASE", vec![])]);
+        let graph = calc_graph(&repo);
+        let total_edges: usize = graph.edges.iter().map(|row| row.len()).sum();
+        assert!(total_edges > 0, "connected graph must have edges");
+    }
+
+    #[test]
+    fn test_parallel_branches_occupy_different_lanes() {
+        // Two independent branch tips that share no parent until ROOT.
+        //   A   (row 0, parent ROOT)
+        //   B   (row 1, parent ROOT)
+        //  ROOT (row 2, no parents)
+        let repo = make_repo(vec![
+            ("A", vec!["ROOT"]),
+            ("B", vec!["ROOT"]),
+            ("ROOT", vec![]),
+        ]);
+        let graph = calc_graph(&repo);
+
+        let a_x = graph.commit_pos_map[&CommitHash::from("A")].x;
+        let b_x = graph.commit_pos_map[&CommitHash::from("B")].x;
+        // A and B must be in different lanes.
+        assert_ne!(a_x, b_x);
+    }
+
+    #[test]
+    fn test_double_merge() {
+        // Two merges in sequence, all positions must be unique per row.
+        //   M2  (row 0, parents [M1, D])
+        //   M1  (row 1, parents [B, C])
+        //   B   (row 2, parent [A])
+        //   C   (row 3, parent [A])
+        //   D   (row 4, parent [A])
+        //   A   (row 5, no parents)
+        let repo = make_repo(vec![
+            ("M2", vec!["M1", "D"]),
+            ("M1", vec!["B", "C"]),
+            ("B", vec!["A"]),
+            ("C", vec!["A"]),
+            ("D", vec!["A"]),
+            ("A", vec![]),
+        ]);
+        let graph = calc_graph(&repo);
+        assert_eq!(graph.commits.len(), 6);
+
+        // No row may have duplicate x positions.
+        let mut by_row: HashMap<usize, Vec<usize>> = HashMap::new();
+        for hash in &graph.commits {
+            let pos = graph.commit_pos_map[hash];
+            by_row.entry(pos.y).or_default().push(pos.x);
+        }
+        for (_, xs) in &by_row {
+            let mut deduped = xs.clone();
+            deduped.dedup();
+            assert_eq!(deduped.len(), xs.len());
         }
     }
 }
