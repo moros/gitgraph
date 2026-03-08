@@ -98,6 +98,38 @@ pub enum UserEvent {
     NextCommit,
     /// Navigate to previous commit (stay in detail view)
     PrevCommit,
+
+    // ── Internal ───────────────────────────────────────────────────────────
+    /// Internal marker for raw key pass-through (e.g. typing in search box).
+    /// Not exposed in keybind config.
+    Unknown,
+}
+
+impl UserEvent {
+    /// Returns true if a numeric prefix should be applied to this event (e.g. `5j` moves 5 down).
+    pub fn is_countable(self) -> bool {
+        matches!(
+            self,
+            UserEvent::NavigateDown
+                | UserEvent::NavigateUp
+                | UserEvent::GoToTop
+                | UserEvent::GoToBottom
+                | UserEvent::SelectTop
+                | UserEvent::SelectMiddle
+                | UserEvent::SelectBottom
+                | UserEvent::HalfPageDown
+                | UserEvent::HalfPageUp
+                | UserEvent::PageDown
+                | UserEvent::PageUp
+                | UserEvent::ScrollDown
+                | UserEvent::ScrollUp
+                | UserEvent::SelectDown
+                | UserEvent::SelectUp
+                | UserEvent::JumpToParent
+                | UserEvent::SearchNext
+                | UserEvent::SearchPrev
+        )
+    }
 }
 
 impl FromStr for UserEvent {
@@ -305,17 +337,24 @@ impl KeyBind {
             }
         }
 
-        // Build KeyEvent → UserEvent map
+        // Collect the set of overridden action names so we can process them last.
+        // This ensures override assignments win any key conflicts with non-overridden defaults.
+        let overridden_actions: std::collections::HashSet<&str> = overrides
+            .and_then(|v| v.as_table())
+            .map(|t| t.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+
+        // Build KeyEvent → UserEvent map.
+        // Two passes: defaults first, overrides second (overrides win key conflicts).
         let mut map: FxHashMap<KeyEvent, UserEvent> = FxHashMap::default();
-        for (action_str, keys) in &action_map {
+
+        let build_entries = |map: &mut FxHashMap<KeyEvent, UserEvent>,
+                              action_str: &str,
+                              keys: &[String]| {
             let event = match action_str.parse::<UserEvent>() {
                 Ok(ev) => ev,
-                Err(_) => {
-                    // Unknown action in TOML — skip silently
-                    continue;
-                }
+                Err(_) => return, // Unknown action — skip silently
             };
-            // Remove any existing mappings for this event before adding new ones
             map.retain(|_, v| *v != event);
             for key_str in keys {
                 match parse_key(key_str) {
@@ -327,7 +366,24 @@ impl KeyBind {
                     }
                 }
             }
+        };
+
+        // Pass 1: non-overridden default actions
+        for (action_str, keys) in &action_map {
+            if overridden_actions.contains(action_str.as_str()) {
+                continue;
+            }
+            build_entries(&mut map, action_str, keys);
         }
+
+        // Pass 2: overridden actions (applied last, win any conflicts)
+        for (action_str, keys) in &action_map {
+            if !overridden_actions.contains(action_str.as_str()) {
+                continue;
+            }
+            build_entries(&mut map, action_str, keys);
+        }
+
 
         Ok(Self { map })
     }

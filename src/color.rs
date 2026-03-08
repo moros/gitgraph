@@ -309,10 +309,10 @@ mod tests {
     #[test]
     fn color_theme_serde_partial_override() {
         // A partial [color] section should keep defaults for unspecified fields.
-        let toml = r#"
+        let toml = r##"
             diff_added = "lightgreen"
             diff_removed = "#ff0000"
-        "#;
+        "##;
         let t: ColorTheme = toml::from_str(toml).expect("partial TOML parse failed");
 
         assert_eq!(t.diff_added, ThemeColor(Color::LightGreen));
