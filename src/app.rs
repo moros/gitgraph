@@ -2,11 +2,11 @@
 
 use crate::config::{Config, GraphWidth, InitialSelection};
 use crate::event::{AppEvent, EventHandler, Sender};
-use crate::git::{CommitHash, Head, Repository};
+use crate::git::{Head, Repository};
 use crate::graph::Graph;
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::view::View;
-use crate::widget::commit_list::CommitInfo;
+use crate::widget::commit_list::{CommitInfo, CommitListState};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Layout, Rect},
@@ -54,6 +54,8 @@ pub struct App {
     view: View,
     app_status: AppStatus,
     tx: Sender,
+    /// Saved list state when the detail view is open, restored on CloseDetail.
+    saved_list_state: Option<CommitListState>,
 }
 
 impl App {
@@ -133,6 +135,7 @@ impl App {
             view,
             app_status: AppStatus::default(),
             tx,
+            saved_list_state: None,
         }
     }
 
@@ -205,9 +208,34 @@ impl App {
                 AppEvent::Quit => break,
 
                 AppEvent::OpenDetail => {
-                    self.app_status.status_line = StatusLine::NotificationInfo(
-                        "Detail view not yet implemented".to_string(),
-                    );
+                    if let Some(list_state) = self.view.take_list_state() {
+                        let idx = list_state.selected + list_state.offset;
+                        if idx < list_state.commits.len() {
+                            let commit_info = list_state.commits[idx].clone();
+                            self.saved_list_state = Some(list_state);
+                            self.view = View::of_detail(
+                                commit_info,
+                                idx,
+                                self.config.clone(),
+                                self.tx.clone(),
+                            );
+                        } else {
+                            // Restore list state if index is out of bounds
+                            self.view.give_list_state(list_state);
+                        }
+                    }
+                }
+                AppEvent::CloseDetail => {
+                    if let Some(list_state) = self.saved_list_state.take() {
+                        self.view =
+                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                    }
+                }
+                AppEvent::DetailNextCommit => {
+                    self.navigate_detail(1);
+                }
+                AppEvent::DetailPrevCommit => {
+                    self.navigate_detail_prev();
                 }
                 AppEvent::OpenRefs => {
                     self.app_status.status_line =
@@ -313,6 +341,36 @@ impl App {
             let x = area.x + cursor_pos + 1; // +1 for left padding
             let y = area.y + 1; // +1 for top border
             f.set_cursor_position((x, y));
+        }
+    }
+
+    /// Navigate to the next commit (higher index) in detail view.
+    fn navigate_detail(&mut self, delta: usize) {
+        if let Some(current_idx) = self.view.detail_commit_index() {
+            if let Some(list_state) = &self.saved_list_state {
+                let new_idx = (current_idx + delta).min(list_state.commits.len().saturating_sub(1));
+                if new_idx != current_idx {
+                    let commit_info = list_state.commits[new_idx].clone();
+                    let config = self.config.clone();
+                    let tx = self.tx.clone();
+                    self.view = View::of_detail(commit_info, new_idx, config, tx);
+                }
+            }
+        }
+    }
+
+    /// Navigate to the previous commit (lower index) in detail view.
+    fn navigate_detail_prev(&mut self) {
+        if let Some(current_idx) = self.view.detail_commit_index() {
+            if current_idx > 0 {
+                let new_idx = current_idx - 1;
+                if let Some(list_state) = &self.saved_list_state {
+                    let commit_info = list_state.commits[new_idx].clone();
+                    let config = self.config.clone();
+                    let tx = self.tx.clone();
+                    self.view = View::of_detail(commit_info, new_idx, config, tx);
+                }
+            }
         }
     }
 

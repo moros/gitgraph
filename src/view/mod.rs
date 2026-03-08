@@ -1,9 +1,10 @@
+pub mod detail;
 pub mod list;
 
 use crate::config::Config;
-use crate::event::{AppEvent, Sender};
+use crate::event::Sender;
 use crate::keybind::UserEventWithCount;
-use crate::widget::commit_list::CommitListState;
+use crate::widget::commit_list::{CommitInfo, CommitListState};
 use crossterm::event::KeyEvent;
 use ratatui::{layout::Rect, Frame};
 use std::rc::Rc;
@@ -13,6 +14,7 @@ pub enum View {
     #[default]
     Default,
     List(Box<list::ListView>),
+    Detail(Box<detail::DetailView>),
 }
 
 impl View {
@@ -20,6 +22,7 @@ impl View {
         match self {
             View::Default => {}
             View::List(view) => view.handle_event(ewc, key),
+            View::Detail(view) => view.handle_event(ewc, key),
         }
     }
 
@@ -27,6 +30,7 @@ impl View {
         match self {
             View::Default => {}
             View::List(view) => view.render(f, area),
+            View::Detail(view) => view.render(f, area),
         }
     }
 
@@ -42,6 +46,20 @@ impl View {
         View::List(Box::new(list::ListView::new(commit_list_state, config, tx)))
     }
 
+    pub fn of_detail(
+        commit_info: CommitInfo,
+        commit_index: usize,
+        config: Rc<Config>,
+        tx: Sender,
+    ) -> Self {
+        View::Detail(Box::new(detail::DetailView::new(
+            commit_info,
+            commit_index,
+            config,
+            tx,
+        )))
+    }
+
     pub fn take_list_state(&mut self) -> Option<CommitListState> {
         match self {
             View::List(view) => view.take_list_state(),
@@ -53,6 +71,14 @@ impl View {
         match self {
             View::List(view) => view.give_list_state(state),
             _ => {}
+        }
+    }
+
+    /// Returns the absolute commit index of the currently displayed commit in Detail view.
+    pub fn detail_commit_index(&self) -> Option<usize> {
+        match self {
+            View::Detail(view) => Some(view.commit_index),
+            _ => None,
         }
     }
 

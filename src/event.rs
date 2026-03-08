@@ -12,6 +12,12 @@ pub enum AppEvent {
     OpenDetail,
     OpenRefs,
     OpenHelp,
+    /// Close the detail view and return to the list view.
+    CloseDetail,
+    /// Navigate to the next commit while staying in detail view.
+    DetailNextCommit,
+    /// Navigate to the previous commit while staying in detail view.
+    DetailPrevCommit,
     CopyToClipboard { name: String, value: String },
     ClearStatusLine,
     UpdateStatusInput(String, Option<u16>, Option<String>),
