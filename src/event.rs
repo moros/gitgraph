@@ -24,7 +24,10 @@ pub enum AppEvent {
     DetailNextCommit,
     /// Navigate to the previous commit while staying in detail view.
     DetailPrevCommit,
-    CopyToClipboard { name: String, value: String },
+    CopyToClipboard {
+        name: String,
+        value: String,
+    },
     ClearStatusLine,
     UpdateStatusInput(String, Option<u16>, Option<String>),
     NotifyInfo(String),
@@ -33,6 +36,9 @@ pub enum AppEvent {
     NotifySuccess(String),
     /// Reload repository data while preserving user context.
     Refresh,
+    /// Terminal focus lost/gained events
+    FocusLost,
+    FocusGained,
 }
 
 #[derive(Clone)]
@@ -65,6 +71,12 @@ impl EventHandler {
                     }
                     Event::Resize(w, h) => {
                         let _ = tx.send(AppEvent::Resize(w, h));
+                    }
+                    Event::FocusLost => {
+                        let _ = tx.send(AppEvent::FocusLost);
+                    }
+                    Event::FocusGained => {
+                        let _ = tx.send(AppEvent::FocusGained);
                     }
                     _ => {}
                 }

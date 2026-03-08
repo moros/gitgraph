@@ -3,7 +3,9 @@
 use crate::config::{Config, GraphWidth, InitialSelection, Protocol};
 use crate::event::{AppEvent, EventHandler, Sender};
 use crate::git::{CommitHash, Head, Ref, Repository};
-use crate::graph::image::{CellWidthType, GraphImageManager, GraphStyle as ImageGraphStyle, ImageColors};
+use crate::graph::image::{
+    CellWidthType, GraphImageManager, GraphStyle as ImageGraphStyle, ImageColors,
+};
 use crate::graph::{render_text_row, Graph};
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::protocol::ImageProtocol;
@@ -81,6 +83,8 @@ pub struct App {
     /// Image protocol in use (None when rendering text graph).
     /// Used to clear the graphics layer when transitioning between views.
     image_protocol: Option<ImageProtocol>,
+    /// Track terminal focus state
+    focused: bool,
 }
 
 impl App {
@@ -162,17 +166,12 @@ impl App {
                 // Commit
                 let commit = repo.commit(hash).cloned().unwrap_or_default();
                 // Refs
-                let refs: Vec<crate::git::Ref> =
-                    repo.refs(hash).into_iter().cloned().collect();
+                let refs: Vec<crate::git::Ref> = repo.refs(hash).into_iter().cloned().collect();
                 for r in &refs {
                     ref_name_to_commit_index_map.insert(r.name().to_string(), i);
                 }
                 // Graph color
-                let color_index = graph
-                    .commit_pos_map
-                    .get(hash)
-                    .map(|p| p.x)
-                    .unwrap_or(0);
+                let color_index = graph.commit_pos_map.get(hash).map(|p| p.x).unwrap_or(0);
                 let graph_color = if branches.is_empty() {
                     Color::White
                 } else {
@@ -229,6 +228,7 @@ impl App {
             saved_list_state: None,
             all_refs,
             image_protocol,
+            focused: true,
         }
     }
 
@@ -238,7 +238,9 @@ impl App {
         events: &EventHandler,
     ) -> anyhow::Result<RunResult> {
         loop {
-            terminal.draw(|f| self.render(f))?;
+            if self.focused {
+                terminal.draw(|f| self.render(f))?;
+            }
 
             match events.next()? {
                 AppEvent::Key(key) => {
@@ -284,8 +286,7 @@ impl App {
                                 // Accumulate numeric prefix
                                 if let crossterm::event::KeyCode::Char(c) = key.code {
                                     if c.is_ascii_digit()
-                                        && (c != '0'
-                                            || !self.app_status.numeric_prefix.is_empty())
+                                        && (c != '0' || !self.app_status.numeric_prefix.is_empty())
                                     {
                                         self.app_status.numeric_prefix.push(c);
                                     }
@@ -297,6 +298,15 @@ impl App {
 
                 AppEvent::Resize(_, _) => continue,
                 AppEvent::Tick => {}
+
+                AppEvent::FocusLost => {
+                    self.focused = false;
+                    // Optionally clear screen to avoid stale UI
+                    self.app_status.clear = true;
+                }
+                AppEvent::FocusGained => {
+                    self.focused = true;
+                }
 
                 AppEvent::Quit => return Ok(RunResult::Quit),
 
@@ -333,8 +343,7 @@ impl App {
                 AppEvent::CloseDetail => {
                     if let Some(list_state) = self.saved_list_state.take() {
                         self.transition();
-                        self.view =
-                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                        self.view = View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
                 }
                 AppEvent::DetailNextCommit => {
@@ -357,8 +366,7 @@ impl App {
                 AppEvent::CloseRefs => {
                     if let Some(list_state) = self.view.take_list_state() {
                         self.transition();
-                        self.view =
-                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                        self.view = View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
                 }
                 AppEvent::OpenHelp => {
@@ -393,8 +401,7 @@ impl App {
                 AppEvent::CloseUserCommand => {
                     if let Some(list_state) = self.view.take_list_state() {
                         self.transition();
-                        self.view =
-                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                        self.view = View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
                 }
 
@@ -455,8 +462,7 @@ impl App {
                 if self.app_status.numeric_prefix.is_empty() {
                     Line::raw("")
                 } else {
-                    Line::raw(self.app_status.numeric_prefix.as_str())
-                        .fg(theme.status_fg.0)
+                    Line::raw(self.app_status.numeric_prefix.as_str()).fg(theme.status_fg.0)
                 }
             }
             StatusLine::Input(msg, _, transient) => {
