@@ -48,9 +48,9 @@ impl FileTreeNode {
     }
 }
 
-fn insert_node<'a>(
+fn insert_node(
     nodes: &mut Vec<FileTreeNode>,
-    components: &[&'a str],
+    components: &[&str],
     depth: usize,
     full_path: &str,
     change: &FileChange,
@@ -93,7 +93,7 @@ fn insert_node<'a>(
     }
 }
 
-fn sort_nodes(nodes: &mut Vec<FileTreeNode>) {
+fn sort_nodes(nodes: &mut [FileTreeNode]) {
     nodes.sort_by(|a, b| {
         match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
@@ -196,5 +196,87 @@ mod tests {
         assert_eq!(file_change_path(&FileChange::Modify("b.rs".into())), "b.rs");
         assert_eq!(file_change_path(&FileChange::Delete("c.rs".into())), "c.rs");
         assert_eq!(file_change_path(&FileChange::Move("old.rs".into(), "new.rs".into())), "new.rs");
+    }
+
+    #[test]
+    fn build_with_add_delete_move_variants() {
+        let changes = vec![
+            FileChange::Add("new_file.rs".into()),
+            FileChange::Delete("old_file.rs".into()),
+            FileChange::Move("src/before.rs".into(), "src/after.rs".into()),
+            FileChange::Modify("src/lib.rs".into()),
+        ];
+        let nodes = FileTreeNode::build(&changes);
+
+        // Dirs first: src/, then files (alpha: new_file.rs, old_file.rs)
+        assert!(nodes[0].is_dir, "first node should be the src/ directory");
+        assert_eq!(nodes[0].name, "src");
+
+        // src/ should contain after.rs and lib.rs (sorted alpha)
+        let src_children = &nodes[0].children;
+        assert_eq!(src_children.len(), 2);
+        assert_eq!(src_children[0].name, "after.rs");
+        assert_eq!(src_children[1].name, "lib.rs");
+
+        // Root file nodes sorted alpha
+        assert_eq!(nodes[1].name, "new_file.rs");
+        assert_eq!(nodes[2].name, "old_file.rs");
+    }
+
+    #[test]
+    fn build_deeply_nested_path() {
+        let changes = vec![FileChange::Modify("a/b/c/deep.rs".into())];
+        let nodes = FileTreeNode::build(&changes);
+
+        // a/ -> b/ -> c/ -> deep.rs
+        assert_eq!(nodes.len(), 1);
+        assert!(nodes[0].is_dir);
+        assert_eq!(nodes[0].name, "a");
+
+        let b = &nodes[0].children[0];
+        assert!(b.is_dir);
+        assert_eq!(b.name, "b");
+
+        let c = &b.children[0];
+        assert!(c.is_dir);
+        assert_eq!(c.name, "c");
+
+        let leaf = &c.children[0];
+        assert!(!leaf.is_dir);
+        assert_eq!(leaf.name, "deep.rs");
+        assert_eq!(leaf.full_path, "a/b/c/deep.rs");
+    }
+
+    #[test]
+    fn build_multiple_files_same_dir() {
+        let changes = vec![
+            FileChange::Add("pkg/a.rs".into()),
+            FileChange::Add("pkg/b.rs".into()),
+            FileChange::Add("pkg/c.rs".into()),
+        ];
+        let nodes = FileTreeNode::build(&changes);
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].name, "pkg");
+        assert_eq!(nodes[0].children.len(), 3);
+        // sorted alpha
+        assert_eq!(nodes[0].children[0].name, "a.rs");
+        assert_eq!(nodes[0].children[1].name, "b.rs");
+        assert_eq!(nodes[0].children[2].name, "c.rs");
+    }
+
+    #[test]
+    fn flatten_all_file_change_types_visible() {
+        let changes = vec![
+            FileChange::Add("add.rs".into()),
+            FileChange::Delete("del.rs".into()),
+            FileChange::Move("from.rs".into(), "to.rs".into()),
+        ];
+        let nodes = FileTreeNode::build(&changes);
+        let flat = FileTreeNode::flatten(&nodes);
+        assert_eq!(flat.len(), 3, "all three file-change leaf nodes should be visible");
+        let names: Vec<&str> = flat.iter().map(|(n, _)| n.name.as_str()).collect();
+        assert!(names.contains(&"add.rs"));
+        assert!(names.contains(&"del.rs"));
+        assert!(names.contains(&"to.rs"));
     }
 }
