@@ -13,8 +13,63 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
+use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::path::Path;
 use std::rc::Rc;
+
+// ---------------------------------------------------------------------------
+// LRU diff cache (process-scoped, thread-local for single-threaded TUI)
+// ---------------------------------------------------------------------------
+
+/// Maximum number of (commit_hash, filepath) → diff entries to keep in memory.
+const DIFF_CACHE_CAPACITY: usize = 64;
+
+/// A simple LRU cache keyed by `(commit_hash, filepath)`.
+///
+/// Most-recently used entries sit at the front of `entries`; eviction removes
+/// from the back.  O(n) lookup is fine for the small capacities used here.
+struct DiffLruCache {
+    entries: VecDeque<((String, String), String)>,
+    capacity: usize,
+}
+
+impl DiffLruCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::with_capacity(capacity),
+            capacity,
+        }
+    }
+
+    fn get(&mut self, key: &(String, String)) -> Option<&str> {
+        if let Some(pos) = self.entries.iter().position(|(k, _)| k == key) {
+            // Move to front (most-recently used).
+            let entry = self.entries.remove(pos).unwrap();
+            self.entries.push_front(entry);
+            Some(&self.entries[0].1)
+        } else {
+            None
+        }
+    }
+
+    fn insert(&mut self, key: (String, String), value: String) {
+        // Update in place if already present.
+        if let Some(pos) = self.entries.iter().position(|(k, _)| k == &key) {
+            self.entries.remove(pos);
+        }
+        self.entries.push_front((key, value));
+        // Evict LRU entry when over capacity.
+        if self.entries.len() > self.capacity {
+            self.entries.pop_back();
+        }
+    }
+}
+
+thread_local! {
+    static DIFF_CACHE: RefCell<DiffLruCache> =
+        RefCell::new(DiffLruCache::new(DIFF_CACHE_CAPACITY));
+}
 
 // ---------------------------------------------------------------------------
 // DetailView
@@ -33,8 +88,6 @@ pub struct DetailView {
     diff_scroll_y: u16,
     /// Horizontal scroll offset for the diff pane (in columns).
     diff_scroll_x: u16,
-    /// Cached diff content for the currently selected file.
-    diff_content: Option<String>,
     config: Rc<Config>,
     tx: Sender,
 }
@@ -65,7 +118,6 @@ impl DetailView {
             selected_file: 0,
             diff_scroll_y: 0,
             diff_scroll_x: 0,
-            diff_content: None,
             config,
             tx,
         }
@@ -363,12 +415,33 @@ impl DetailView {
     }
 
     /// Returns the diff content for the currently selected file, loading it if needed.
+    ///
+    /// Results are stored in the process-scoped LRU cache so that revisiting
+    /// the same (commit, file) pair — even after navigating away — is instant.
     fn ensure_diff_content(&mut self) -> String {
-        if self.diff_content.is_none() {
-            let content = self.load_diff_content();
-            self.diff_content = Some(content);
+        let key = self.diff_cache_key();
+        // Check the global LRU cache first.
+        let cached = DIFF_CACHE.with(|c| c.borrow_mut().get(&key).map(|s| s.to_owned()));
+        if let Some(content) = cached {
+            return content;
         }
-        self.diff_content.clone().unwrap_or_default()
+        // Cache miss — load and store.
+        let content = self.load_diff_content();
+        DIFF_CACHE.with(|c| c.borrow_mut().insert(key, content.clone()));
+        content
+    }
+
+    /// Build the cache key for the currently selected file.
+    fn diff_cache_key(&self) -> (String, String) {
+        let hash = self.commit_info.commit.hash.as_str().to_owned();
+        let filepath = match self.file_changes.get(self.selected_file) {
+            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => {
+                p.clone()
+            }
+            Some(FileChange::Move(_, to)) => to.clone(),
+            None => String::new(),
+        };
+        (hash, filepath)
     }
 
     fn load_diff_content(&self) -> String {
@@ -415,7 +488,7 @@ impl DetailView {
     }
 
     fn invalidate_diff(&mut self) {
-        self.diff_content = None;
+        // Diff content is held in the global LRU cache; only reset scroll position.
         self.diff_scroll_y = 0;
         self.diff_scroll_x = 0;
     }
