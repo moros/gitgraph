@@ -4,6 +4,10 @@
 
 `gg` merges the best of two tools into one: browse a visual git log graph (like [serie](https://github.com/lusingander/serie)), select a commit, and explore its changes through a collapsible file tree with inline diffs (like [ftdv](https://github.com/dmacvicar/ftdv)) — without leaving the terminal.
 
+![List View](images/list-view.png)
+
+![Detail View](images/detail-view.png)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │ Graph │ ● │ Subject                       │ Author  │ Hash  │
