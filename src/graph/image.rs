@@ -4,6 +4,8 @@ use std::{
     io::Cursor,
 };
 
+use rayon::prelude::*;
+
 use crate::{
     git::CommitHash,
     graph::{
@@ -159,6 +161,53 @@ impl<'a> GraphImageManager<'a> {
         self.encoded_image_map = encoded;
     }
 
+    /// Preload encoded images for commits in `start..end` using a rayon thread pool.
+    ///
+    /// Already-cached commits are skipped. This is the primary API for keeping the
+    /// visible window preloaded during fast J/K navigation.
+    pub fn preload_range(&mut self, start: usize, end: usize) {
+        let end = end.min(self.graph.commits.len());
+        if start >= end {
+            return;
+        }
+
+        let to_render: Vec<&CommitHash> = self.graph.commits[start..end]
+            .iter()
+            .filter(|h| !self.encoded_image_map.contains_key(*h))
+            .collect();
+
+        if to_render.is_empty() {
+            return;
+        }
+
+        // Capture shared references so the parallel closure does not borrow `self`.
+        let graph = self.graph;
+        let image_params = &self.image_params;
+        let drawing_pixels = &self.drawing_pixels;
+        let graph_style = self.graph_style;
+        let cell_width_type = self.cell_width_type;
+        let image_protocol = self.image_protocol;
+
+        let new_entries: Vec<(CommitHash, String)> = to_render
+            .into_par_iter()
+            .map(|commit_hash| {
+                let row_image = build_single_graph_row_image(
+                    graph,
+                    image_params,
+                    drawing_pixels,
+                    graph_style,
+                    commit_hash,
+                );
+                let encoded = row_image.encode(cell_width_type, image_protocol);
+                (commit_hash.clone(), encoded)
+            })
+            .collect();
+
+        for (hash, encoded) in new_entries {
+            self.encoded_image_map.insert(hash, encoded);
+        }
+    }
+
     /// Lazy-load the encoded image for a single commit (no-op if already cached).
     pub fn load_encoded_image(&mut self, commit_hash: &CommitHash) {
         if self.encoded_image_map.contains_key(commit_hash) {
@@ -298,18 +347,20 @@ pub fn build_graph_image(
 
     let cell_count = graph.max_pos_x + 1;
 
-    let mut images: HashMap<Vec<Edge>, GraphRowImage> = HashMap::new();
-    for (pos_x, edges) in seen {
-        let row_image = calc_graph_row_image(
-            pos_x,
-            cell_count,
-            &edges,
-            image_params,
-            drawing_pixels,
-            graph_style,
-        );
-        images.insert(edges, row_image);
-    }
+    let images: HashMap<Vec<Edge>, GraphRowImage> = seen
+        .into_par_iter()
+        .map(|(pos_x, edges)| {
+            let row_image = calc_graph_row_image(
+                pos_x,
+                cell_count,
+                &edges,
+                image_params,
+                drawing_pixels,
+                graph_style,
+            );
+            (edges, row_image)
+        })
+        .collect();
 
     GraphImage { images }
 }
@@ -1031,6 +1082,77 @@ mod tests {
         assert!(!dp.horizontal_edge.is_empty());
         assert!(!dp.up_edge.is_empty());
         assert!(!dp.down_edge.is_empty());
+    }
+
+    #[test]
+    fn preload_range_populates_cache() {
+        use crate::{
+            git::{Commit, CommitHash, Repository},
+            graph::calc_graph,
+        };
+        use std::collections::HashMap;
+
+        // Build a tiny linear graph: A → B → C (newest first)
+        let commit_data: Vec<(&str, Vec<&str>)> = vec![
+            ("A", vec!["B"]),
+            ("B", vec!["C"]),
+            ("C", vec![]),
+        ];
+
+        let commit_list: Vec<Commit> = commit_data
+            .iter()
+            .map(|(hash, parents)| Commit {
+                hash: CommitHash::from(*hash),
+                parent_hashes: parents.iter().map(|p| CommitHash::from(*p)).collect(),
+                ..Default::default()
+            })
+            .collect();
+
+        let commit_hashes: Vec<CommitHash> = commit_list.iter().map(|c| c.hash.clone()).collect();
+        let mut commit_map: HashMap<CommitHash, Commit> = HashMap::new();
+        let mut children_map: HashMap<CommitHash, Vec<CommitHash>> = HashMap::new();
+
+        for commit in &commit_list {
+            for parent in &commit.parent_hashes {
+                children_map
+                    .entry(parent.clone())
+                    .or_default()
+                    .push(commit.hash.clone());
+            }
+            commit_map.insert(commit.hash.clone(), commit.clone());
+        }
+
+        let repo = Repository::new(commit_hashes, commit_map, children_map);
+        let graph = calc_graph(&repo);
+
+        let colors = default_colors();
+        let mut mgr = GraphImageManager::new(
+            &graph,
+            &colors,
+            CellWidthType::Single,
+            GraphStyle::Angular,
+            crate::protocol::ImageProtocol::Iterm2,
+            false, // don't preload at construction
+        );
+
+        // Nothing loaded yet.
+        assert!(mgr.encoded_image_map.is_empty());
+
+        // Preload the first two commits.
+        mgr.preload_range(0, 2);
+
+        let h_a = CommitHash::from("A");
+        let h_b = CommitHash::from("B");
+        let h_c = CommitHash::from("C");
+
+        assert!(mgr.encoded_image_map.contains_key(&h_a));
+        assert!(mgr.encoded_image_map.contains_key(&h_b));
+        // Third commit not yet loaded.
+        assert!(!mgr.encoded_image_map.contains_key(&h_c));
+
+        // Extending the range loads the third commit without re-rendering the first two.
+        mgr.preload_range(0, 3);
+        assert!(mgr.encoded_image_map.contains_key(&h_c));
     }
 
     #[test]
