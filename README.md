@@ -6,27 +6,27 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Graph │ ● │ Subject                      │ Author  │ Hash  │
+│ Graph │ ● │ Subject                       │ Author  │ Hash  │
 │  ██   │   │ feat: add OAuth2 module       │ jdoe    │ a1b2c │
-│  ██   │   │ fix: resolve token refresh   │ jdoe    │ 3d4e5 │
-│  ██   │   │ Merge branch 'feature/auth'  │ alice   │ 6f7g8 │
+│  ██   │   │ fix: resolve token refresh    │ jdoe    │ 3d4e5 │
+│  ██   │   │ Merge branch 'feature/auth'   │ alice   │ 6f7g8 │
 ├─────────────────────────────────────────────────────────────┤
-│ Author:  John Doe <john@example.com>   Date: 2024-01-15    │
-│ SHA:     a1b2c3d4e5f6  (HEAD → main)                       │
-│                                                              │
-│ feat: add OAuth2 module                                      │
-├─────────────────────┬────────────────────────────────────────┤
-│ File Tree           │ Diff Content                           │
-│                     │                                        │
+│ Author:  John Doe <john@example.com>   Date: 2024-01-15     │
+│ SHA:     a1b2c3d4e5f6  (HEAD → main)                        │
+│                                                             │
+│ feat: add OAuth2 module                                     │
+├─────────────────────┬───────────────────────────────────────┤
+│ File Tree           │ Diff Content                          │
+│                     │                                       │
 │ ├──  src/           │ @@ -10,6 +10,8 @@                     │
-│ │   ├──  auth/     │  use crate::config;                    │
-│ │   │   ├── mod.rs │ +use crate::oauth;                     │
-│ │   │   └── oauth… │ +use crate::token;                     │
-│ │   └── main.rs    │                                        │
-│ ├──  tests/        │  fn main() {                           │
-│ └── Cargo.toml     │ +    let client = OAuth::new();        │
-│   +142 -23         │                                        │
-└─────────────────────┴────────────────────────────────────────┘
+│ │   ├──  auth/      │  use crate::config;                   │
+│ │   │   ├── mod.rs  │ +use crate::oauth;                    │
+│ │   │   └── oauth…  │ +use crate::token;                    │
+│ │   └── main.rs     │                                       │
+│ ├──  tests/         │  fn main() {                          │
+│ └── Cargo.toml      │ +    let client = OAuth::new();       │
+│   +142 -23          │                                       │
+└─────────────────────┴───────────────────────────────────────┘
 ```
 
 ## Features
