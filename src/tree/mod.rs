@@ -1,5 +1,7 @@
 // FileTreeBuilder and FileTreeItem for constructing hierarchical file trees from diffs.
 
+pub mod icons;
+
 use crate::git::diff::FileChange;
 
 /// Extract the path string from any FileChange variant.

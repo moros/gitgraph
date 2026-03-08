@@ -384,7 +384,7 @@ impl DetailView {
         let parent = commit.parent_hashes.first();
         let file_diff = match parent {
             Some(parent_hash) => {
-                crate::git::diff::file_diff(parent_hash, &commit.hash, &filepath)
+                crate::git::diff::file_diff(Path::new("."), parent_hash, &commit.hash, &filepath)
             }
             None => crate::git::diff::FileDiff {
                 filename: filepath.clone(),
