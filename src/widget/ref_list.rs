@@ -76,8 +76,7 @@ impl RefListState {
     pub fn selected_branch(&self) -> Option<String> {
         let selected = self.tree_state.selected();
         if selected.len() > 1
-            && (selected[0] == TREE_BRANCH_ROOT_IDENT
-                || selected[0] == TREE_REMOTE_ROOT_IDENT)
+            && (selected[0] == TREE_BRANCH_ROOT_IDENT || selected[0] == TREE_REMOTE_ROOT_IDENT)
         {
             selected.last().cloned()
         } else {
@@ -119,11 +118,9 @@ impl StatefulWidget for RefList {
         let tree = Tree::new(&self.items)
             .unwrap()
             .node_closed_symbol("\u{25b8} ") // ▸
-            .node_open_symbol("\u{25be} ")   // ▾
+            .node_open_symbol("\u{25be} ") // ▾
             .node_no_children_symbol("  ")
-            .highlight_style(
-                Style::default().bg(self.config.color.refs_selected_bg.0),
-            )
+            .highlight_style(Style::default().bg(self.config.color.refs_selected_bg.0))
             .block(
                 Block::default()
                     .borders(Borders::LEFT)
@@ -149,9 +146,7 @@ fn build_ref_tree_items(refs: &[Ref]) -> Vec<TreeItem<'static, String>> {
             Ref::Tag { name, .. } => tag_refs.push(name.clone()),
             Ref::Branch { name, .. } => branch_refs.push(name.clone()),
             Ref::RemoteBranch { name, .. } => remote_refs.push(name.clone()),
-            Ref::Stash { name, message, .. } => {
-                stash_refs.push((name.clone(), message.clone()))
-            }
+            Ref::Stash { name, message, .. } => stash_refs.push((name.clone(), message.clone())),
         }
     }
 

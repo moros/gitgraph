@@ -77,7 +77,13 @@ fn insert_node(
         };
 
         if let Some(existing) = nodes.iter_mut().find(|n| n.is_dir && n.name == dir_name) {
-            insert_node(&mut existing.children, &components[1..], depth + 1, full_path, change);
+            insert_node(
+                &mut existing.children,
+                &components[1..],
+                depth + 1,
+                full_path,
+                change,
+            );
         } else {
             let mut dir_node = FileTreeNode {
                 name: dir_name.to_string(),
@@ -87,19 +93,23 @@ fn insert_node(
                 children: Vec::new(),
                 expanded: true,
             };
-            insert_node(&mut dir_node.children, &components[1..], depth + 1, full_path, change);
+            insert_node(
+                &mut dir_node.children,
+                &components[1..],
+                depth + 1,
+                full_path,
+                change,
+            );
             nodes.push(dir_node);
         }
     }
 }
 
 fn sort_nodes(nodes: &mut [FileTreeNode]) {
-    nodes.sort_by(|a, b| {
-        match (a.is_dir, b.is_dir) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
+    nodes.sort_by(|a, b| match (a.is_dir, b.is_dir) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
     });
     for node in nodes.iter_mut() {
         if node.is_dir {
@@ -130,7 +140,10 @@ mod tests {
     use super::*;
 
     fn make_changes(paths: &[&str]) -> Vec<FileChange> {
-        paths.iter().map(|p| FileChange::Modify(p.to_string())).collect()
+        paths
+            .iter()
+            .map(|p| FileChange::Modify(p.to_string()))
+            .collect()
     }
 
     #[test]
@@ -195,7 +208,10 @@ mod tests {
         assert_eq!(file_change_path(&FileChange::Add("a.rs".into())), "a.rs");
         assert_eq!(file_change_path(&FileChange::Modify("b.rs".into())), "b.rs");
         assert_eq!(file_change_path(&FileChange::Delete("c.rs".into())), "c.rs");
-        assert_eq!(file_change_path(&FileChange::Move("old.rs".into(), "new.rs".into())), "new.rs");
+        assert_eq!(
+            file_change_path(&FileChange::Move("old.rs".into(), "new.rs".into())),
+            "new.rs"
+        );
     }
 
     #[test]
@@ -273,7 +289,11 @@ mod tests {
         ];
         let nodes = FileTreeNode::build(&changes);
         let flat = FileTreeNode::flatten(&nodes);
-        assert_eq!(flat.len(), 3, "all three file-change leaf nodes should be visible");
+        assert_eq!(
+            flat.len(),
+            3,
+            "all three file-change leaf nodes should be visible"
+        );
         let names: Vec<&str> = flat.iter().map(|(n, _)| n.name.as_str()).collect();
         assert!(names.contains(&"add.rs"));
         assert!(names.contains(&"del.rs"));

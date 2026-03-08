@@ -42,11 +42,8 @@ pub struct HelpView {
 impl HelpView {
     pub fn new(before: View, config: Rc<Config>, tx: Sender) -> Self {
         let (help_key_lines, help_value_lines) = build_lines(&config);
-        let help_key_line_max_width = help_key_lines
-            .iter()
-            .map(|l| l.width())
-            .max()
-            .unwrap_or(0) as u16;
+        let help_key_line_max_width =
+            help_key_lines.iter().map(|l| l.width()).max().unwrap_or(0) as u16;
         let _ = config; // used for build_lines only
         Self {
             before,

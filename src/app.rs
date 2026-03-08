@@ -1,6 +1,6 @@
 //! Application state machine, event loop, and rendering.
 
-use crate::config::{Config, GraphWidth, InitialSelection, Protocol};
+use crate::config::{Config, GraphWidth, InitialSelection, Protocol, DEFAULT_GRAPH_MAX_WIDTH};
 use crate::event::{AppEvent, EventHandler, Sender};
 use crate::git::{CommitHash, Head, Ref, Repository};
 use crate::graph::image::{
@@ -99,10 +99,7 @@ impl App {
         // Build CommitInfo for each commit in display order
         let branches = &config.graph.color.branches;
         let lane_count = (graph.max_pos_x + 1) as u16;
-        let graph_cell_width = match config.core.graph_width {
-            GraphWidth::Single => lane_count,
-            _ => lane_count * 2, // Auto or Double
-        };
+        let graph_cell_width = effective_graph_cell_width(&config, lane_count);
 
         let mut ref_name_to_commit_index_map: FxHashMap<String, usize> = FxHashMap::default();
 
@@ -142,6 +139,7 @@ impl App {
                 image_graph_style,
                 image_protocol, // ImageProtocol is Copy
                 true,
+                graph_cell_width,
             ))
         } else {
             None
@@ -179,7 +177,13 @@ impl App {
                 };
 
                 let graph_line = if use_text_graph {
-                    render_text_row(graph, hash)
+                    // Ensure the text graph does not exceed the allocated cell width.
+                    let full = render_text_row(graph, hash);
+                    if full.chars().count() > graph_cell_width as usize {
+                        full.chars().take(graph_cell_width as usize).collect()
+                    } else {
+                        full
+                    }
                 } else {
                     image_manager
                         .as_ref()
@@ -605,6 +609,19 @@ fn theme_color_to_rgba(tc: &ThemeColor) -> image::Rgba<u8> {
     }
 }
 
+fn effective_graph_cell_width(config: &Config, lane_count: u16) -> u16 {
+    let graph_cell_width = match config.core.graph_width {
+        GraphWidth::Single => lane_count,
+        _ => lane_count * 2, // Auto or Double
+    };
+    let max_width = if config.core.graph_max_width > 0 {
+        config.core.graph_max_width
+    } else {
+        DEFAULT_GRAPH_MAX_WIDTH
+    };
+    graph_cell_width.min(max_width)
+}
+
 fn process_numeric_prefix(numeric_prefix: &str, user_event: UserEvent) -> UserEventWithCount {
     if user_event.is_countable() {
         let count = if numeric_prefix.is_empty() {
@@ -615,5 +632,46 @@ fn process_numeric_prefix(numeric_prefix: &str, user_event: UserEvent) -> UserEv
         UserEventWithCount::new(user_event, count)
     } else {
         UserEventWithCount::new(user_event, None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        color::ColorTheme,
+        config::{CoreConfig, GraphConfig, UiConfig},
+        keybind::KeyBind,
+    };
+
+    fn test_config() -> Config {
+        Config {
+            core: CoreConfig::default(),
+            ui: UiConfig::default(),
+            graph: GraphConfig::default(),
+            color: ColorTheme::default(),
+            keybind: KeyBind::new(None).expect("default keybinds should parse"),
+        }
+    }
+
+    #[test]
+    fn effective_graph_cell_width_uses_default_cap_when_graph_max_width_is_zero() {
+        let mut config = test_config();
+        config.core.graph_width = GraphWidth::Double;
+        config.core.graph_max_width = 0;
+
+        assert_eq!(
+            effective_graph_cell_width(&config, 20),
+            DEFAULT_GRAPH_MAX_WIDTH
+        );
+    }
+
+    #[test]
+    fn effective_graph_cell_width_respects_configured_max_width() {
+        let mut config = test_config();
+        config.core.graph_width = GraphWidth::Single;
+        config.core.graph_max_width = 8;
+
+        assert_eq!(effective_graph_cell_width(&config, 12), 8);
     }
 }

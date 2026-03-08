@@ -33,8 +33,14 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
         let events = event::EventHandler::new();
         let tx = events.sender();
 
-        let mut app =
-            app::App::new(&repo, &graph, config, tx, restore_hash.as_ref(), use_text_graph);
+        let mut app = app::App::new(
+            &repo,
+            &graph,
+            config,
+            tx,
+            restore_hash.as_ref(),
+            use_text_graph,
+        );
 
         match app.run(terminal, &events)? {
             RunResult::Quit => break,

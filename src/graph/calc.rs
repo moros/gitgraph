@@ -128,7 +128,12 @@ struct PendingEdge {
 
 impl PendingEdge {
     fn new(edge_type: EdgeType, pos_x: usize, color_x: usize, owner: CommitHash) -> Self {
-        Self { edge_type, pos_x, color_x, owner }
+        Self {
+            edge_type,
+            pos_x,
+            color_x,
+            owner,
+        }
     }
 }
 
@@ -197,12 +202,25 @@ fn calc_edges(
 
         // If this commit has parents that are not in the graph (truncated log),
         // draw a dangling vertical so the lane appears to continue.
-        if !commit.parent_hashes.is_empty()
-            && repository.commit(&commit.parent_hashes[0]).is_none()
+        if !commit.parent_hashes.is_empty() && repository.commit(&commit.parent_hashes[0]).is_none()
         {
-            push_edge(&mut pending, pos.y, EdgeType::Down, pos.x, pos.x, &commit.hash);
+            push_edge(
+                &mut pending,
+                pos.y,
+                EdgeType::Down,
+                pos.x,
+                pos.x,
+                &commit.hash,
+            );
             for y in (pos.y + 1)..n {
-                push_edge(&mut pending, y, EdgeType::Vertical, pos.x, pos.x, &commit.hash);
+                push_edge(
+                    &mut pending,
+                    y,
+                    EdgeType::Vertical,
+                    pos.x,
+                    pos.x,
+                    &commit.hash,
+                );
             }
         }
     }
@@ -230,13 +248,7 @@ fn calc_edges(
                 find_merge_overlap(&pending, pos_map, commits, pos, child_pos, &commit.hash);
 
             if overlap {
-                draw_merge_detour_edges(
-                    &mut pending,
-                    pos,
-                    child_pos,
-                    new_pos_x,
-                    &commit.hash,
-                );
+                draw_merge_detour_edges(&mut pending, pos, child_pos, new_pos_x, &commit.hash);
                 if new_pos_x > max_pos_x {
                     max_pos_x = new_pos_x;
                 }
@@ -301,20 +313,48 @@ fn draw_branch_edges(
         for x in (pos.x + 1)..child_pos.x {
             push_edge(pending, pos.y, EdgeType::Horizontal, x, child_pos.x, owner);
         }
-        push_edge(pending, pos.y, EdgeType::RightBottom, child_pos.x, child_pos.x, owner);
+        push_edge(
+            pending,
+            pos.y,
+            EdgeType::RightBottom,
+            child_pos.x,
+            child_pos.x,
+            owner,
+        );
     } else {
         // Parent is to the right of child — curve left then down.
         push_edge(pending, pos.y, EdgeType::Left, pos.x, child_pos.x, owner);
         for x in (child_pos.x + 1)..pos.x {
             push_edge(pending, pos.y, EdgeType::Horizontal, x, child_pos.x, owner);
         }
-        push_edge(pending, pos.y, EdgeType::LeftBottom, child_pos.x, child_pos.x, owner);
+        push_edge(
+            pending,
+            pos.y,
+            EdgeType::LeftBottom,
+            child_pos.x,
+            child_pos.x,
+            owner,
+        );
     }
     // Vertical stretch from child row down to parent row.
     for y in (child_pos.y + 1)..pos.y {
-        push_edge(pending, y, EdgeType::Vertical, child_pos.x, child_pos.x, owner);
+        push_edge(
+            pending,
+            y,
+            EdgeType::Vertical,
+            child_pos.x,
+            child_pos.x,
+            owner,
+        );
     }
-    push_edge(pending, child_pos.y, EdgeType::Down, child_pos.x, child_pos.x, owner);
+    push_edge(
+        pending,
+        child_pos.y,
+        EdgeType::Down,
+        child_pos.x,
+        child_pos.x,
+        owner,
+    );
 }
 
 /// Determine whether drawing a merge edge from `pos` to `child_pos` would
@@ -393,13 +433,34 @@ fn draw_merge_direct_edges(
         for x in (pos.x + 1)..child_pos.x {
             push_edge(pending, child_pos.y, EdgeType::Horizontal, x, pos.x, owner);
         }
-        push_edge(pending, child_pos.y, EdgeType::Left, child_pos.x, pos.x, owner);
+        push_edge(
+            pending,
+            child_pos.y,
+            EdgeType::Left,
+            child_pos.x,
+            pos.x,
+            owner,
+        );
     } else {
-        push_edge(pending, child_pos.y, EdgeType::RightTop, pos.x, pos.x, owner);
+        push_edge(
+            pending,
+            child_pos.y,
+            EdgeType::RightTop,
+            pos.x,
+            pos.x,
+            owner,
+        );
         for x in (child_pos.x + 1)..pos.x {
             push_edge(pending, child_pos.y, EdgeType::Horizontal, x, pos.x, owner);
         }
-        push_edge(pending, child_pos.y, EdgeType::Right, child_pos.x, pos.x, owner);
+        push_edge(
+            pending,
+            child_pos.y,
+            EdgeType::Right,
+            child_pos.x,
+            pos.x,
+            owner,
+        );
     }
 }
 
@@ -416,7 +477,14 @@ fn draw_merge_detour_edges(
     for x in (pos.x + 1)..new_pos_x {
         push_edge(pending, pos.y, EdgeType::Horizontal, x, pos.x, owner);
     }
-    push_edge(pending, pos.y, EdgeType::RightBottom, new_pos_x, pos.x, owner);
+    push_edge(
+        pending,
+        pos.y,
+        EdgeType::RightBottom,
+        new_pos_x,
+        pos.x,
+        owner,
+    );
 
     // Vertical in detour lane from parent row up to child row.
     for y in (child_pos.y + 1)..pos.y {
@@ -424,11 +492,25 @@ fn draw_merge_detour_edges(
     }
 
     // At child row: come back left to child lane.
-    push_edge(pending, child_pos.y, EdgeType::RightTop, new_pos_x, pos.x, owner);
+    push_edge(
+        pending,
+        child_pos.y,
+        EdgeType::RightTop,
+        new_pos_x,
+        pos.x,
+        owner,
+    );
     for x in (child_pos.x + 1)..new_pos_x {
         push_edge(pending, child_pos.y, EdgeType::Horizontal, x, pos.x, owner);
     }
-    push_edge(pending, child_pos.y, EdgeType::Right, child_pos.x, pos.x, owner);
+    push_edge(
+        pending,
+        child_pos.y,
+        EdgeType::Right,
+        child_pos.x,
+        pos.x,
+        owner,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -472,11 +554,7 @@ mod tests {
     #[test]
     fn test_linear_graph() {
         // A → B → C (linear, single lane)
-        let repo = make_repo(vec![
-            ("A", vec!["B"]),
-            ("B", vec!["C"]),
-            ("C", vec![]),
-        ]);
+        let repo = make_repo(vec![("A", vec!["B"]), ("B", vec!["C"]), ("C", vec![])]);
         let graph = calc_graph(&repo);
 
         assert_eq!(graph.commits.len(), 3);
@@ -537,11 +615,7 @@ mod tests {
     #[test]
     fn test_commit_ordering_newest_first() {
         // Graph commits list must preserve the input order (newest-first).
-        let repo = make_repo(vec![
-            ("C3", vec!["C2"]),
-            ("C2", vec!["C1"]),
-            ("C1", vec![]),
-        ]);
+        let repo = make_repo(vec![("C3", vec!["C2"]), ("C2", vec!["C1"]), ("C1", vec![])]);
         let graph = calc_graph(&repo);
 
         assert_eq!(graph.commits[0], CommitHash::from("C3"));

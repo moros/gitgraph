@@ -94,7 +94,12 @@ pub fn get_initial_commit_additions(path: &Path, commit_hash: &CommitHash) -> Ve
 ///
 /// For initial commits (no parent / empty parent hash), synthesises a diff
 /// showing every line as added via `git show commit:filepath`.
-pub fn file_diff(path: &Path, parent: &CommitHash, commit: &CommitHash, filepath: &str) -> FileDiff {
+pub fn file_diff(
+    path: &Path,
+    parent: &CommitHash,
+    commit: &CommitHash,
+    filepath: &str,
+) -> FileDiff {
     let is_initial = parent.as_str().is_empty();
 
     let raw = if is_initial {
@@ -107,7 +112,12 @@ pub fn file_diff(path: &Path, parent: &CommitHash, commit: &CommitHash, filepath
 }
 
 /// Run `git diff --color=never parent..commit -- filepath`.
-fn get_diff_output(path: &Path, parent: &CommitHash, commit: &CommitHash, filepath: &str) -> String {
+fn get_diff_output(
+    path: &Path,
+    parent: &CommitHash,
+    commit: &CommitHash,
+    filepath: &str,
+) -> String {
     let output = Command::new("git")
         .arg("diff")
         .arg("--color=never")

@@ -233,8 +233,7 @@ impl DetailView {
         // Layout: metadata header (fixed height) | body (file tree + diff)
         let header_height = self.header_height();
         let [header_area, body_area] =
-            Layout::vertical([Constraint::Length(header_height), Constraint::Min(0)])
-                .areas(area);
+            Layout::vertical([Constraint::Length(header_height), Constraint::Min(0)]).areas(area);
 
         self.render_header(f, header_area);
         self.render_body(f, body_area);
@@ -245,12 +244,20 @@ impl DetailView {
     fn header_height(&self) -> u16 {
         // hash + author + date + blank separator + subject = 5 base lines
         let base = 5u16;
-        let refs_line = if !self.commit_info.refs.is_empty() { 1u16 } else { 0 };
+        let refs_line = if !self.commit_info.refs.is_empty() {
+            1u16
+        } else {
+            0
+        };
         let body_count = self.commit_info.commit.body.lines().count();
         let visible = body_count.min(5) as u16;
         let indicator = if body_count > 5 { 1u16 } else { 0 };
         // +1 blank line before body when body is present
-        let body_lines = if body_count > 0 { 1 + visible + indicator } else { 0 };
+        let body_lines = if body_count > 0 {
+            1 + visible + indicator
+        } else {
+            0
+        };
         base + refs_line + body_lines + 2 // +2 for top/bottom borders
     }
 
@@ -292,10 +299,7 @@ impl DetailView {
         // Author
         lines.push(Line::from(vec![
             Span::styled("Author: ", Style::default().fg(theme.border.0)),
-            Span::raw(format!(
-                "{} <{}>",
-                commit.author.name, commit.author.email
-            )),
+            Span::raw(format!("{} <{}>", commit.author.name, commit.author.email)),
         ]));
 
         // Date
@@ -324,8 +328,8 @@ impl DetailView {
             {
                 lines.push(Line::raw(format!("    {body_line}")));
             }
-            let remaining = total_body_lines
-                .saturating_sub(self.metadata_scroll_y as usize + max_visible);
+            let remaining =
+                total_body_lines.saturating_sub(self.metadata_scroll_y as usize + max_visible);
             if remaining > 0 {
                 lines.push(Line::styled(
                     format!("    ... {remaining} more lines"),
@@ -347,8 +351,7 @@ impl DetailView {
         // Left: file tree (~30% width, min 20, max 50)
         let tree_width = ((area.width as u32 * 30 / 100) as u16).clamp(20, 50);
         let [tree_area, diff_area] =
-            Layout::horizontal([Constraint::Length(tree_width), Constraint::Min(0)])
-                .areas(area);
+            Layout::horizontal([Constraint::Length(tree_width), Constraint::Min(0)]).areas(area);
 
         self.render_file_tree(f, tree_area);
         self.render_diff_pane(f, diff_area);
@@ -369,7 +372,10 @@ impl DetailView {
                     FileChange::Move(_from, to) => ("R ", to.as_str()),
                 };
                 let (prefix_color, path_style) = if i == self.selected_file {
-                    (Color::Green, Style::default().add_modifier(Modifier::REVERSED))
+                    (
+                        Color::Green,
+                        Style::default().add_modifier(Modifier::REVERSED),
+                    )
                 } else {
                     let c = match change {
                         FileChange::Add(_) => Color::Green,
@@ -481,9 +487,7 @@ impl DetailView {
     fn diff_cache_key(&self) -> (String, String) {
         let hash = self.commit_info.commit.hash.as_str().to_owned();
         let filepath = match self.file_changes.get(self.selected_file) {
-            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => {
-                p.clone()
-            }
+            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => p.clone(),
             Some(FileChange::Move(_, to)) => to.clone(),
             None => String::new(),
         };
@@ -493,9 +497,7 @@ impl DetailView {
     fn load_diff_content(&self) -> String {
         let commit = &self.commit_info.commit;
         let filepath = match self.file_changes.get(self.selected_file) {
-            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => {
-                p.clone()
-            }
+            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => p.clone(),
             Some(FileChange::Move(_, to)) => to.clone(),
             None => return String::new(),
         };

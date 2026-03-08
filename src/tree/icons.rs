@@ -22,7 +22,7 @@ pub fn get_file_icon(filename: &str) -> char {
         "CHANGELOG.md" => '\u{f48a}',          //
 
         // Docker
-        "Dockerfile" => '\u{e7b0}', //
+        "Dockerfile" => '\u{e7b0}',                                 //
         "docker-compose.yml" | "docker-compose.yaml" => '\u{e7b0}', //
 
         _ => {
@@ -33,22 +33,22 @@ pub fn get_file_icon(filename: &str) -> char {
                         "rs" => '\u{e7a8}',                                 //
                         "c" | "h" => '\u{e61e}',                            //
                         "cpp" | "cxx" | "cc" | "hpp" | "hxx" => '\u{e61d}', //
-                        "go" => '\u{e724}',                                  //
+                        "go" => '\u{e724}',                                 //
                         "java" | "class" | "jar" => '\u{e738}',             //
 
                         // Scripted / interpreted
                         "py" | "pyc" | "pyo" | "pyw" => '\u{e73c}', //
-                        "rb" => '\u{e739}',                           //
+                        "rb" => '\u{e739}',                         //
                         "sh" | "bash" | "zsh" | "fish" => '\u{f489}', //
-                        "lua" => '\u{e620}',                          //
+                        "lua" => '\u{e620}',                        //
 
                         // Web
-                        "js" | "jsx" | "mjs" => '\u{e74e}',           //
-                        "ts" | "tsx" => '\u{e628}',                    //
-                        "html" | "htm" => '\u{e736}',                  //
+                        "js" | "jsx" | "mjs" => '\u{e74e}', //
+                        "ts" | "tsx" => '\u{e628}',         //
+                        "html" | "htm" => '\u{e736}',       //
                         "css" | "scss" | "sass" | "less" => '\u{e749}', //
-                        "vue" => '\u{fd42}',                           //
-                        "svelte" => '\u{e697}',                        //
+                        "vue" => '\u{fd42}',                //
+                        "svelte" => '\u{e697}',             //
 
                         // Config / data
                         "json" => '\u{e60b}',                 //

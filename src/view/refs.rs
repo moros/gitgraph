@@ -94,8 +94,7 @@ impl RefsView {
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         let refs_width = self.config.ui.refs.width as u16;
         let [list_area, refs_area] =
-            Layout::horizontal([Constraint::Min(0), Constraint::Length(refs_width)])
-                .areas(area);
+            Layout::horizontal([Constraint::Min(0), Constraint::Length(refs_width)]).areas(area);
 
         let commit_list = CommitList::new(self.config.clone());
         f.render_stateful_widget(commit_list, list_area, self.list_state_mut());

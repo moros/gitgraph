@@ -1,13 +1,13 @@
 //! CommitDetail widget — renders commit metadata at the top of the detail view.
 
 use crate::config::Config;
-use crate::git::{Commit, Ref};
 use crate::git::diff::FileChange;
+use crate::git::{Commit, Ref};
 use chrono::DateTime;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, Borders, StatefulWidget, Widget},
 };
@@ -25,7 +25,11 @@ pub struct CommitDetailState {
 
 impl CommitDetailState {
     pub fn new(commit: Commit, file_changes: Vec<FileChange>, refs: Vec<Ref>) -> Self {
-        Self { commit, file_changes, refs }
+        Self {
+            commit,
+            file_changes,
+            refs,
+        }
     }
 }
 
@@ -148,7 +152,11 @@ impl StatefulWidget for CommitDetail {
             if y >= inner.y + inner.height {
                 break;
             }
-            let row_area = Rect { y, height: 1, ..inner };
+            let row_area = Rect {
+                y,
+                height: 1,
+                ..inner
+            };
             line.render(row_area, buf);
         }
     }

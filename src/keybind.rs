@@ -349,25 +349,24 @@ impl KeyBind {
         // Two passes: defaults first, overrides second (overrides win key conflicts).
         let mut map: FxHashMap<KeyEvent, UserEvent> = FxHashMap::default();
 
-        let build_entries = |map: &mut FxHashMap<KeyEvent, UserEvent>,
-                              action_str: &str,
-                              keys: &[String]| {
-            let event = match action_str.parse::<UserEvent>() {
-                Ok(ev) => ev,
-                Err(_) => return, // Unknown action — skip silently
-            };
-            map.retain(|_, v| *v != event);
-            for key_str in keys {
-                match parse_key(key_str) {
-                    Ok(key_event) => {
-                        map.insert(key_event, event);
-                    }
-                    Err(e) => {
-                        eprintln!("gitgraph: keybind warning — {e}");
+        let build_entries =
+            |map: &mut FxHashMap<KeyEvent, UserEvent>, action_str: &str, keys: &[String]| {
+                let event = match action_str.parse::<UserEvent>() {
+                    Ok(ev) => ev,
+                    Err(_) => return, // Unknown action — skip silently
+                };
+                map.retain(|_, v| *v != event);
+                for key_str in keys {
+                    match parse_key(key_str) {
+                        Ok(key_event) => {
+                            map.insert(key_event, event);
+                        }
+                        Err(e) => {
+                            eprintln!("gitgraph: keybind warning — {e}");
+                        }
                     }
                 }
-            }
-        };
+            };
 
         // Pass 1: non-overridden default actions
         for (action_str, keys) in &action_map {
@@ -384,7 +383,6 @@ impl KeyBind {
             }
             build_entries(&mut map, action_str, keys);
         }
-
 
         Ok(Self { map })
     }

@@ -54,10 +54,8 @@ impl Repository {
         let commit_hashes: Vec<CommitHash> = commits.iter().map(|c| c.hash.clone()).collect();
 
         let (parents_map, children_map) = build_commits_maps(&commits);
-        let commit_map: HashMap<CommitHash, Commit> = commits
-            .into_iter()
-            .map(|c| (c.hash.clone(), c))
-            .collect();
+        let commit_map: HashMap<CommitHash, Commit> =
+            commits.into_iter().map(|c| (c.hash.clone(), c)).collect();
 
         let stash_ref_map = load_stashes_as_refs(&path);
         merge_ref_maps(&mut ref_map, stash_ref_map);
@@ -151,8 +149,10 @@ impl Repository {
 }
 
 fn load_commits_format() -> String {
-    ["%H", "%an", "%ae", "%ad", "%cn", "%ce", "%cd", "%s", "%b", "%P"]
-        .join("\x1f")
+    [
+        "%H", "%an", "%ae", "%ad", "%cn", "%ce", "%cd", "%s", "%b", "%P",
+    ]
+    .join("\x1f")
 }
 
 fn load_commits(path: &Path, order: LogOrder, head: &Head, stashes: &[Commit]) -> Vec<Commit> {
@@ -374,15 +374,13 @@ fn load_refs(path: &Path) -> (RefMap, Head) {
 
 fn merge_stashes_to_commits(commits: Vec<Commit>, stashes: Vec<Commit>) -> Vec<Commit> {
     let mut stash_map: HashMap<CommitHash, Vec<Commit>> =
-        stashes
-            .into_iter()
-            .fold(HashMap::new(), |mut acc, commit| {
-                if !commit.parent_hashes.is_empty() {
-                    let parent = commit.parent_hashes[0].clone();
-                    acc.entry(parent).or_default().push(commit);
-                }
-                acc
-            });
+        stashes.into_iter().fold(HashMap::new(), |mut acc, commit| {
+            if !commit.parent_hashes.is_empty() {
+                let parent = commit.parent_hashes[0].clone();
+                acc.entry(parent).or_default().push(commit);
+            }
+            acc
+        });
 
     let mut ret = Vec::new();
     for commit in commits {
@@ -474,7 +472,11 @@ fn get_current_branch(path: &Path) -> Option<String> {
     let stdout = cmd.stdout.take().expect("failed to open stdout");
     let reader = BufReader::new(stdout);
 
-    let branch = reader.lines().next().and_then(|l| l.ok()).filter(|s| !s.is_empty());
+    let branch = reader
+        .lines()
+        .next()
+        .and_then(|l| l.ok())
+        .filter(|s| !s.is_empty());
 
     cmd.wait().unwrap();
 

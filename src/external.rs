@@ -272,7 +272,11 @@ fn replace_user_cmd_arg(s: &str, params: &ExternalCommandParameters) -> String {
         return s.to_string();
     }
     let sep = " ";
-    let first_parent = params.parent_hashes.first().map(|s| s.as_str()).unwrap_or("");
+    let first_parent = params
+        .parent_hashes
+        .first()
+        .map(|s| s.as_str())
+        .unwrap_or("");
     s.replace(USER_CMD_TARGET_HASH, &params.target_hash)
         .replace(USER_CMD_FIRST_PARENT_HASH, first_parent)
         .replace(USER_CMD_PARENT_HASHES, &params.parent_hashes.join(sep))

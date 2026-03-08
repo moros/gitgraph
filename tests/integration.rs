@@ -95,8 +95,16 @@ fn test_repo_load_commit_ordering() {
     // Commits are stored newest-first (git log order).
     let newest = &repo.commit_hashes[0];
     let oldest = &repo.commit_hashes[2];
-    assert_eq!(newest.as_str(), hashes[2], "first entry should be newest commit");
-    assert_eq!(oldest.as_str(), hashes[0], "last entry should be oldest commit");
+    assert_eq!(
+        newest.as_str(),
+        hashes[2],
+        "first entry should be newest commit"
+    );
+    assert_eq!(
+        oldest.as_str(),
+        hashes[0],
+        "last entry should be oldest commit"
+    );
 
     // all_commits() returns them in the same order.
     let all = repo.all_commits();
@@ -138,26 +146,38 @@ fn test_repo_ref_resolution() {
     // The tag "v0.1" should be attached to the oldest commit.
     let oldest_hash = CommitHash::from(hashes[0].as_str());
     let refs = repo.refs(&oldest_hash);
-    let tag_names: Vec<&str> = refs.iter().filter_map(|r| {
-        if let gitgraph::git::Ref::Tag { name, .. } = r {
-            Some(name.as_str())
-        } else {
-            None
-        }
-    }).collect();
-    assert!(tag_names.contains(&"v0.1"), "tag v0.1 should be on oldest commit; got {tag_names:?}");
+    let tag_names: Vec<&str> = refs
+        .iter()
+        .filter_map(|r| {
+            if let gitgraph::git::Ref::Tag { name, .. } = r {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(
+        tag_names.contains(&"v0.1"),
+        "tag v0.1 should be on oldest commit; got {tag_names:?}"
+    );
 
     // The branch "main" ref should be on the newest commit.
     let newest_hash = CommitHash::from(hashes[1].as_str());
     let newest_refs = repo.refs(&newest_hash);
-    let branch_names: Vec<&str> = newest_refs.iter().filter_map(|r| {
-        if let gitgraph::git::Ref::Branch { name, .. } = r {
-            Some(name.as_str())
-        } else {
-            None
-        }
-    }).collect();
-    assert!(branch_names.contains(&"main"), "branch main should be on newest commit; got {branch_names:?}");
+    let branch_names: Vec<&str> = newest_refs
+        .iter()
+        .filter_map(|r| {
+            if let gitgraph::git::Ref::Branch { name, .. } = r {
+                Some(name.as_str())
+            } else {
+                None
+            }
+        })
+        .collect();
+    assert!(
+        branch_names.contains(&"main"),
+        "branch main should be on newest commit; got {branch_names:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -235,9 +255,15 @@ fn test_file_diff_initial_commit() {
     let diff = file_diff(tmp.path(), &parent, &commit, "file1.txt");
 
     assert_eq!(diff.filename, "file1.txt");
-    assert!(diff.added_lines >= 1, "initial commit should have added lines");
+    assert!(
+        diff.added_lines >= 1,
+        "initial commit should have added lines"
+    );
     assert_eq!(diff.removed_lines, 0, "initial commit removes nothing");
-    assert!(diff.content.contains("+content 1"), "diff should contain added content");
+    assert!(
+        diff.content.contains("+content 1"),
+        "diff should contain added content"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -373,7 +399,10 @@ fn test_config_load_defaults_when_no_file() {
 
     // Point the env var at a path that doesn't exist.
     let _lock = CWD_MUTEX.lock().unwrap();
-    std::env::set_var("GITGRAPH_CONFIG_FILE", "/tmp/__gitgraph_nonexistent_config__.toml");
+    std::env::set_var(
+        "GITGRAPH_CONFIG_FILE",
+        "/tmp/__gitgraph_nonexistent_config__.toml",
+    );
     let result = Config::load();
     std::env::remove_var("GITGRAPH_CONFIG_FILE");
     drop(_lock);

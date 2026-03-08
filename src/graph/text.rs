@@ -54,8 +54,8 @@ fn edge_type_to_char(et: EdgeType) -> char {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::graph::{Edge, Graph, Position};
     use crate::git::CommitHash;
+    use crate::graph::{Edge, Graph, Position};
     use std::collections::HashMap;
 
     fn make_hash(s: &str) -> CommitHash {

@@ -147,8 +147,7 @@ impl UserCommandView {
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         let output_height = (area.height / 2).max(5).min(area.height.saturating_sub(3));
         let [list_area, output_area] =
-            Layout::vertical([Constraint::Min(0), Constraint::Length(output_height)])
-                .areas(area);
+            Layout::vertical([Constraint::Min(0), Constraint::Length(output_height)]).areas(area);
 
         // Commit list (top)
         let list_widget = CommitList::new(self.config.clone());
@@ -221,8 +220,12 @@ impl UserCommandView {
     fn refresh_output(&mut self) {
         let config = self.config.clone();
         let tx = self.tx.clone();
-        self.command_output =
-            Self::run_command(&self.commit_list_state, self.user_command_slot, &config, &tx);
+        self.command_output = Self::run_command(
+            &self.commit_list_state,
+            self.user_command_slot,
+            &config,
+            &tx,
+        );
         self.scroll_offset = 0;
     }
 
@@ -240,9 +243,16 @@ impl UserCommandView {
         let commit = &commit_info.commit;
         let refs = &commit_info.refs;
 
-        let cmd_def = config.core.user_command.commands().into_iter().find(|(s, _)| *s == slot);
+        let cmd_def = config
+            .core
+            .user_command
+            .commands()
+            .into_iter()
+            .find(|(s, _)| *s == slot);
         let Some((_, def)) = cmd_def else {
-            tx.send(AppEvent::NotifyError(format!("No user command configured for slot {slot}")));
+            tx.send(AppEvent::NotifyError(format!(
+                "No user command configured for slot {slot}"
+            )));
             return vec![];
         };
 

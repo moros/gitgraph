@@ -100,13 +100,16 @@ impl Config {
 // CoreConfig
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct CoreConfig {
     /// Git log ordering strategy.
     pub order: OrderType,
     /// Graph cell width (auto-detects from terminal width).
     pub graph_width: GraphWidth,
+    /// Maximum graph column width in terminal cells (0 uses the default cap).
+    #[serde(default = "default_graph_max_width")]
+    pub graph_max_width: u16,
     /// Graph line rendering style.
     pub graph_style: GraphStyle,
     /// Which commit to select on startup.
@@ -117,6 +120,30 @@ pub struct CoreConfig {
     pub external: ExternalConfig,
     pub diff: DiffConfig,
     pub user_command: UserCommandConfig,
+}
+
+pub(crate) const DEFAULT_GRAPH_MAX_WIDTH: u16 = 22;
+
+// Default maximum graph column width (in terminal cells).
+fn default_graph_max_width() -> u16 {
+    DEFAULT_GRAPH_MAX_WIDTH
+}
+
+impl Default for CoreConfig {
+    fn default() -> Self {
+        Self {
+            order: OrderType::default(),
+            graph_width: GraphWidth::default(),
+            graph_max_width: default_graph_max_width(),
+            graph_style: GraphStyle::default(),
+            initial_selection: InitialSelection::default(),
+            protocol: Protocol::default(),
+            search: SearchConfig::default(),
+            external: ExternalConfig::default(),
+            diff: DiffConfig::default(),
+            user_command: UserCommandConfig::default(),
+        }
+    }
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -337,10 +364,7 @@ pub struct ListUiConfig {
 impl Default for ListUiConfig {
     fn default() -> Self {
         Self {
-            columns: VALID_COLUMNS
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
+            columns: VALID_COLUMNS.iter().map(|s| s.to_string()).collect(),
             subject_min_width: 20,
             date_format: "%Y-%m-%d".to_string(),
             date_width: 10,
@@ -431,6 +455,7 @@ mod tests {
         let c = CoreConfig::default();
         assert_eq!(c.order, OrderType::Chrono);
         assert_eq!(c.graph_width, GraphWidth::Auto);
+        assert_eq!(c.graph_max_width, DEFAULT_GRAPH_MAX_WIDTH);
         assert_eq!(c.graph_style, GraphStyle::Rounded);
         assert_eq!(c.initial_selection, InitialSelection::Latest);
         assert_eq!(c.protocol, Protocol::Auto);

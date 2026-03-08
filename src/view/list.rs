@@ -142,7 +142,11 @@ impl ListView {
                 });
             }
             UserEvent::CopyFullHash => {
-                let hash = self.list_state().selected_commit_hash().as_str().to_string();
+                let hash = self
+                    .list_state()
+                    .selected_commit_hash()
+                    .as_str()
+                    .to_string();
                 self.tx.send(AppEvent::CopyToClipboard {
                     name: "full hash".to_string(),
                     value: hash,

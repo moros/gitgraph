@@ -102,13 +102,17 @@ impl FromStr for ThemeColor {
             "reset" | "transparent" => Color::Reset,
             _ if lower.starts_with("color") => {
                 let idx_str = &lower["color".len()..];
-                let idx: u8 = idx_str
-                    .parse()
-                    .map_err(|_| format!("invalid indexed color (must be color0–color255): {s:?}"))?;
+                let idx: u8 = idx_str.parse().map_err(|_| {
+                    format!("invalid indexed color (must be color0–color255): {s:?}")
+                })?;
                 Color::Indexed(idx)
             }
             _ if s.starts_with('#') => parse_hex(s)?,
-            _ => return Err(format!("unknown color {s:?}; expected a named color, colorN, or #rrggbb")),
+            _ => {
+                return Err(format!(
+                    "unknown color {s:?}; expected a named color, colorN, or #rrggbb"
+                ))
+            }
         };
         Ok(ThemeColor(color))
     }
@@ -117,14 +121,13 @@ impl FromStr for ThemeColor {
 fn parse_hex(s: &str) -> Result<Color, String> {
     let hex = s.trim_start_matches('#');
     if hex.len() != 6 {
-        return Err(format!("hex color must be exactly 6 hex digits, got: {s:?}"));
+        return Err(format!(
+            "hex color must be exactly 6 hex digits, got: {s:?}"
+        ));
     }
-    let r = u8::from_str_radix(&hex[0..2], 16)
-        .map_err(|_| format!("invalid hex color: {s:?}"))?;
-    let g = u8::from_str_radix(&hex[2..4], 16)
-        .map_err(|_| format!("invalid hex color: {s:?}"))?;
-    let b = u8::from_str_radix(&hex[4..6], 16)
-        .map_err(|_| format!("invalid hex color: {s:?}"))?;
+    let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| format!("invalid hex color: {s:?}"))?;
+    let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| format!("invalid hex color: {s:?}"))?;
+    let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| format!("invalid hex color: {s:?}"))?;
     Ok(Color::Rgb(r, g, b))
 }
 
@@ -170,46 +173,127 @@ mod tests {
 
     #[test]
     fn parse_named_colors() {
-        assert_eq!("black".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Black));
-        assert_eq!("white".parse::<ThemeColor>().unwrap(), ThemeColor(Color::White));
+        assert_eq!(
+            "black".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Black)
+        );
+        assert_eq!(
+            "white".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::White)
+        );
         assert_eq!("red".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Red));
-        assert_eq!("green".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Green));
-        assert_eq!("yellow".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Yellow));
-        assert_eq!("blue".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Blue));
-        assert_eq!("cyan".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Cyan));
-        assert_eq!("magenta".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Magenta));
-        assert_eq!("gray".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Gray));
-        assert_eq!("grey".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Gray));
-        assert_eq!("darkgray".parse::<ThemeColor>().unwrap(), ThemeColor(Color::DarkGray));
-        assert_eq!("lightred".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightRed));
-        assert_eq!("lightblue".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightBlue));
-        assert_eq!("lightgreen".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightGreen));
-        assert_eq!("lightyellow".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightYellow));
-        assert_eq!("lightmagenta".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightMagenta));
-        assert_eq!("lightcyan".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightCyan));
+        assert_eq!(
+            "green".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Green)
+        );
+        assert_eq!(
+            "yellow".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Yellow)
+        );
+        assert_eq!(
+            "blue".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Blue)
+        );
+        assert_eq!(
+            "cyan".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Cyan)
+        );
+        assert_eq!(
+            "magenta".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Magenta)
+        );
+        assert_eq!(
+            "gray".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Gray)
+        );
+        assert_eq!(
+            "grey".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Gray)
+        );
+        assert_eq!(
+            "darkgray".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::DarkGray)
+        );
+        assert_eq!(
+            "lightred".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightRed)
+        );
+        assert_eq!(
+            "lightblue".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightBlue)
+        );
+        assert_eq!(
+            "lightgreen".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightGreen)
+        );
+        assert_eq!(
+            "lightyellow".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightYellow)
+        );
+        assert_eq!(
+            "lightmagenta".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightMagenta)
+        );
+        assert_eq!(
+            "lightcyan".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightCyan)
+        );
     }
 
     #[test]
     fn parse_case_insensitive() {
-        assert_eq!("BLACK".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Black));
-        assert_eq!("LightRed".parse::<ThemeColor>().unwrap(), ThemeColor(Color::LightRed));
-        assert_eq!("CYAN".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Cyan));
+        assert_eq!(
+            "BLACK".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Black)
+        );
+        assert_eq!(
+            "LightRed".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::LightRed)
+        );
+        assert_eq!(
+            "CYAN".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Cyan)
+        );
     }
 
     #[test]
     fn parse_special_colors() {
-        assert_eq!("reset".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Reset));
-        assert_eq!("transparent".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Reset));
-        assert_eq!("TRANSPARENT".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Reset));
+        assert_eq!(
+            "reset".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Reset)
+        );
+        assert_eq!(
+            "transparent".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Reset)
+        );
+        assert_eq!(
+            "TRANSPARENT".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Reset)
+        );
     }
 
     #[test]
     fn parse_indexed_colors() {
-        assert_eq!("color0".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Indexed(0)));
-        assert_eq!("color42".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Indexed(42)));
-        assert_eq!("color128".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Indexed(128)));
-        assert_eq!("color255".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Indexed(255)));
-        assert_eq!("COLOR42".parse::<ThemeColor>().unwrap(), ThemeColor(Color::Indexed(42)));
+        assert_eq!(
+            "color0".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Indexed(0))
+        );
+        assert_eq!(
+            "color42".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Indexed(42))
+        );
+        assert_eq!(
+            "color128".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Indexed(128))
+        );
+        assert_eq!(
+            "color255".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Indexed(255))
+        );
+        assert_eq!(
+            "COLOR42".parse::<ThemeColor>().unwrap(),
+            ThemeColor(Color::Indexed(42))
+        );
     }
 
     #[test]
@@ -240,9 +324,9 @@ mod tests {
 
     #[test]
     fn parse_hex_invalid_fails() {
-        assert!("#12345".parse::<ThemeColor>().is_err());   // too short
+        assert!("#12345".parse::<ThemeColor>().is_err()); // too short
         assert!("#1234567".parse::<ThemeColor>().is_err()); // too long
-        assert!("#gggggg".parse::<ThemeColor>().is_err());  // invalid hex digits
+        assert!("#gggggg".parse::<ThemeColor>().is_err()); // invalid hex digits
     }
 
     #[test]
@@ -264,7 +348,9 @@ mod tests {
         ];
         for tc in &cases {
             let s = tc.to_string();
-            let parsed: ThemeColor = s.parse().unwrap_or_else(|e| panic!("roundtrip failed for {s:?}: {e}"));
+            let parsed: ThemeColor = s
+                .parse()
+                .unwrap_or_else(|e| panic!("roundtrip failed for {s:?}: {e}"));
             assert_eq!(*tc, parsed, "roundtrip mismatch for {s:?}");
         }
     }
@@ -279,8 +365,8 @@ mod tests {
         let cases = ["red", "#e06c75", "color42", "transparent"];
         for &s in &cases {
             let toml = format!("color = \"{s}\"\n");
-            let w: Wrapper = toml::from_str(&toml)
-                .unwrap_or_else(|e| panic!("failed to parse {s:?}: {e}"));
+            let w: Wrapper =
+                toml::from_str(&toml).unwrap_or_else(|e| panic!("failed to parse {s:?}: {e}"));
             let out = toml::to_string(&w).unwrap();
             let w2: Wrapper = toml::from_str(&out).unwrap();
             assert_eq!(w.color, w2.color, "serde roundtrip failed for {s:?}");

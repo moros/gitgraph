@@ -183,7 +183,9 @@ impl StatefulWidget for FileTree {
 
         let theme = &self.config.color;
         let connector_style = Style::default().fg(theme.tree_connector.0);
-        let dir_style = Style::default().fg(theme.tree_directory.0).add_modifier(Modifier::BOLD);
+        let dir_style = Style::default()
+            .fg(theme.tree_directory.0)
+            .add_modifier(Modifier::BOLD);
         let file_style = Style::default().fg(theme.tree_file.0);
         let selected_bg = theme.tree_selected_bg.0;
 
@@ -194,12 +196,20 @@ impl StatefulWidget for FileTree {
             let y = area.y + row_idx as u16;
             let is_selected = state.offset + row_idx == state.selected;
 
-            let row_area = Rect { y, height: 1, ..area };
+            let row_area = Rect {
+                y,
+                height: 1,
+                ..area
+            };
 
             // Indentation + connector
             let indent = "  ".repeat(*depth);
             let connector = if node.is_dir {
-                if node.expanded { "▼ " } else { "▶ " }
+                if node.expanded {
+                    "▼ "
+                } else {
+                    "▶ "
+                }
             } else {
                 "  "
             };
@@ -246,7 +256,10 @@ mod tests {
     use crate::git::diff::FileChange;
 
     fn changes(paths: &[&str]) -> Vec<FileChange> {
-        paths.iter().map(|p| FileChange::Modify(p.to_string())).collect()
+        paths
+            .iter()
+            .map(|p| FileChange::Modify(p.to_string()))
+            .collect()
     }
 
     #[test]

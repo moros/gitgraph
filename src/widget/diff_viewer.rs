@@ -73,7 +73,11 @@ impl DiffViewerState {
             .map(|line| {
                 if line.starts_with("@@") {
                     DiffLine::HunkHeader(line.to_string())
-                } else if line.starts_with("diff ") || line.starts_with("---") || line.starts_with("+++") || line.starts_with("index ") {
+                } else if line.starts_with("diff ")
+                    || line.starts_with("---")
+                    || line.starts_with("+++")
+                    || line.starts_with("index ")
+                {
                     DiffLine::Header(line.to_string())
                 } else if let Some(stripped) = line.strip_prefix('+') {
                     DiffLine::Added(stripped.to_string())
@@ -140,7 +144,12 @@ impl StatefulWidget for DiffViewer {
             let line_no = state.vertical_offset + row_idx + 1;
 
             // Gutter with line number
-            let gutter_area = Rect { x: area.x, y, width: gutter_width, height: 1 };
+            let gutter_area = Rect {
+                x: area.x,
+                y,
+                width: gutter_width,
+                height: 1,
+            };
             let gutter_text = format!("{:>3} ", line_no);
             Line::styled(gutter_text, Style::default().fg(theme.detail_label.0))
                 .render(gutter_area, buf);
@@ -149,11 +158,18 @@ impl StatefulWidget for DiffViewer {
                 continue;
             }
 
-            let content_area = Rect { x: content_x, y, width: content_width, height: 1 };
+            let content_area = Rect {
+                x: content_x,
+                y,
+                width: content_width,
+                height: 1,
+            };
 
             let (text, style) = match diff_line {
                 DiffLine::Header(s) => (s.as_str(), Style::default().fg(theme.diff_file_header.0)),
-                DiffLine::HunkHeader(s) => (s.as_str(), Style::default().fg(theme.diff_hunk_header.0)),
+                DiffLine::HunkHeader(s) => {
+                    (s.as_str(), Style::default().fg(theme.diff_hunk_header.0))
+                }
                 DiffLine::Added(s) => (s.as_str(), Style::default().fg(theme.diff_added.0)),
                 DiffLine::Removed(s) => (s.as_str(), Style::default().fg(theme.diff_removed.0)),
                 DiffLine::Context(s) => (s.as_str(), Style::default().fg(theme.diff_context.0)),
@@ -197,16 +213,26 @@ mod tests {
         assert_eq!(state.vertical_offset, 0);
         assert_eq!(state.horizontal_offset, 0);
 
-        let kinds: Vec<&str> = state.lines.iter().map(|l| match l {
-            DiffLine::Header(_) => "header",
-            DiffLine::HunkHeader(_) => "hunk",
-            DiffLine::Added(_) => "added",
-            DiffLine::Removed(_) => "removed",
-            DiffLine::Context(_) => "context",
-            DiffLine::Empty => "empty",
-        }).collect();
+        let kinds: Vec<&str> = state
+            .lines
+            .iter()
+            .map(|l| match l {
+                DiffLine::Header(_) => "header",
+                DiffLine::HunkHeader(_) => "hunk",
+                DiffLine::Added(_) => "added",
+                DiffLine::Removed(_) => "removed",
+                DiffLine::Context(_) => "context",
+                DiffLine::Empty => "empty",
+            })
+            .collect();
 
-        assert_eq!(kinds, ["header", "header", "header", "header", "hunk", "context", "removed", "added", "context"]);
+        assert_eq!(
+            kinds,
+            [
+                "header", "header", "header", "header", "hunk", "context", "removed", "added",
+                "context"
+            ]
+        );
     }
 
     #[test]

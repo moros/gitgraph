@@ -401,7 +401,8 @@ impl CommitListState {
             let size = self.height.min(self.total);
             self.offset = self.total.saturating_sub(size);
             let moved = self.offset.saturating_sub(old_offset);
-            self.selected = (self.selected + scroll_height.saturating_sub(moved)).min(size.saturating_sub(1));
+            self.selected =
+                (self.selected + scroll_height.saturating_sub(moved)).min(size.saturating_sub(1));
         }
     }
 
@@ -414,9 +415,7 @@ impl CommitListState {
         } else {
             let old_offset = self.offset;
             self.offset = 0;
-            self.selected = self
-                .selected
-                .saturating_sub(scroll_height - old_offset);
+            self.selected = self.selected.saturating_sub(scroll_height - old_offset);
         }
     }
 
@@ -577,8 +576,7 @@ impl CommitListState {
             ..
         } = self.search_state
         {
-            self.search_input
-                .handle_event(&Event::Key(key));
+            self.search_input.handle_event(&Event::Key(key));
             self.update_search_matches(ignore_case, fuzzy);
             self.select_current_or_next_match_index(start_index);
         }
@@ -799,7 +797,13 @@ impl StatefulWidget for CommitList {
                 "Subject" => render_subject(buf, chunks[i], state, &self.config.color),
                 "Name" => render_name(buf, chunks[i], state, &self.config.color),
                 "Hash" => render_hash(buf, chunks[i], state, &self.config.color),
-                "Date" => render_date(buf, chunks[i], state, &self.config.color, &self.config.ui.list),
+                "Date" => render_date(
+                    buf,
+                    chunks[i],
+                    state,
+                    &self.config.color,
+                    &self.config.ui.list,
+                ),
                 _ => {}
             }
         }
@@ -816,9 +820,17 @@ fn render_graph(buf: &mut Buffer, area: Rect, state: &CommitListState) {
     }
     for (i, ci) in rendering_iter(state).collect::<Vec<_>>() {
         if !ci.graph_line.is_empty() {
-            buf[(area.left(), area.top() + i as u16)].set_symbol(&ci.graph_line);
-            for w in 1..area.width.saturating_sub(1) {
-                buf[(area.left() + w, area.top() + i as u16)].set_skip(true);
+            let y = area.top() + i as u16;
+            let graph_x = if area.left() == 0 && area.width > 1 {
+                buf[(area.left(), y)].set_symbol(" ");
+                area.left() + 1
+            } else {
+                area.left()
+            };
+
+            buf[(graph_x, y)].set_symbol(&ci.graph_line);
+            for x in (graph_x + 1)..area.right() {
+                buf[(x, y)].set_skip(true);
             }
         }
     }
@@ -841,7 +853,12 @@ fn render_subject(buf: &mut Buffer, area: Rect, state: &CommitListState, theme: 
     }
     let items: Vec<ListItem> = rendering_iter(state)
         .map(|(i, ci)| {
-            let mut spans = refs_spans(ci, &state.head, &state.search_matches[state.offset + i].refs, theme);
+            let mut spans = refs_spans(
+                ci,
+                &state.head,
+                &state.search_matches[state.offset + i].refs,
+                theme,
+            );
             let refs_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
             let subj_width = max_width.saturating_sub(refs_width);
             let commit = &ci.commit;
@@ -849,24 +866,29 @@ fn render_subject(buf: &mut Buffer, area: Rect, state: &CommitListState, theme: 
                 let char_count = commit.subject.chars().count();
                 let truncate = char_count > subj_width;
                 let subject = if truncate {
-                    let s: String = commit.subject.chars().take(subj_width.saturating_sub(ELLIPSIS.len())).collect();
+                    let s: String = commit
+                        .subject
+                        .chars()
+                        .take(subj_width.saturating_sub(ELLIPSIS.len()))
+                        .collect();
                     format!("{s}{ELLIPSIS}")
                 } else {
                     commit.subject.clone()
                 };
-                let sub_spans = if let Some(pos) = state.search_matches[state.offset + i].subject.clone() {
-                    highlighted_spans(
-                        Span::raw(subject),
-                        pos,
-                        theme.list_subject.0,
-                        Modifier::empty(),
-                        theme.search_match.0,
-                        theme.search_match_bg.0,
-                        truncate,
-                    )
-                } else {
-                    vec![subject.fg(theme.list_subject.0)]
-                };
+                let sub_spans =
+                    if let Some(pos) = state.search_matches[state.offset + i].subject.clone() {
+                        highlighted_spans(
+                            Span::raw(subject),
+                            pos,
+                            theme.list_subject.0,
+                            Modifier::empty(),
+                            theme.search_match.0,
+                            theme.search_match_bg.0,
+                            truncate,
+                        )
+                    } else {
+                        vec![subject.fg(theme.list_subject.0)]
+                    };
                 spans.extend(sub_spans);
             }
             to_list_item(i, spans, state, theme)
@@ -886,24 +908,28 @@ fn render_name(buf: &mut Buffer, area: Rect, state: &CommitListState, theme: &Co
             let char_count = name.chars().count();
             let truncate = char_count > max_width;
             let display = if truncate {
-                let s: String = name.chars().take(max_width.saturating_sub(ELLIPSIS.len())).collect();
+                let s: String = name
+                    .chars()
+                    .take(max_width.saturating_sub(ELLIPSIS.len()))
+                    .collect();
                 format!("{s}{ELLIPSIS}")
             } else {
                 name.clone()
             };
-            let spans = if let Some(pos) = state.search_matches[state.offset + i].author_name.clone() {
-                highlighted_spans(
-                    Span::raw(display),
-                    pos,
-                    theme.list_author.0,
-                    Modifier::empty(),
-                    theme.search_match.0,
-                    theme.search_match_bg.0,
-                    truncate,
-                )
-            } else {
-                vec![display.fg(theme.list_author.0)]
-            };
+            let spans =
+                if let Some(pos) = state.search_matches[state.offset + i].author_name.clone() {
+                    highlighted_spans(
+                        Span::raw(display),
+                        pos,
+                        theme.list_author.0,
+                        Modifier::empty(),
+                        theme.search_match.0,
+                        theme.search_match_bg.0,
+                        truncate,
+                    )
+                } else {
+                    vec![display.fg(theme.list_author.0)]
+                };
             to_list_item(i, spans, state, theme)
         })
         .collect();
@@ -917,19 +943,20 @@ fn render_hash(buf: &mut Buffer, area: Rect, state: &CommitListState, theme: &Co
     let items: Vec<ListItem> = rendering_iter(state)
         .map(|(i, ci)| {
             let hash = ci.commit.hash.as_short_hash();
-            let spans = if let Some(pos) = state.search_matches[state.offset + i].commit_hash.clone() {
-                highlighted_spans(
-                    Span::raw(hash),
-                    pos,
-                    theme.list_hash.0,
-                    Modifier::empty(),
-                    theme.search_match.0,
-                    theme.search_match_bg.0,
-                    false,
-                )
-            } else {
-                vec![hash.fg(theme.list_hash.0)]
-            };
+            let spans =
+                if let Some(pos) = state.search_matches[state.offset + i].commit_hash.clone() {
+                    highlighted_spans(
+                        Span::raw(hash),
+                        pos,
+                        theme.list_hash.0,
+                        Modifier::empty(),
+                        theme.search_match.0,
+                        theme.search_match_bg.0,
+                        false,
+                    )
+                } else {
+                    vec![hash.fg(theme.list_hash.0)]
+                };
             to_list_item(i, spans, state, theme)
         })
         .collect();
@@ -948,7 +975,11 @@ fn render_date(
     }
     let items: Vec<ListItem> = rendering_iter(state)
         .map(|(i, ci)| {
-            let date_str = format_date(&ci.commit.author.date, &list_cfg.date_format, list_cfg.date_local);
+            let date_str = format_date(
+                &ci.commit.author.date,
+                &list_cfg.date_format,
+                list_cfg.date_local,
+            );
             to_list_item(i, vec![date_str.fg(theme.list_date.0)], state, theme)
         })
         .collect();
@@ -1108,7 +1139,8 @@ fn calc_cell_widths(
     columns: &[String],
 ) -> Vec<Constraint> {
     let pad: u16 = 2;
-    let (mut graph_w, mut marker_w, mut name_w, mut hash_w, mut date_w) = (0u16, 0u16, 0u16, 0u16, 0u16);
+    let (mut graph_w, mut marker_w, mut name_w, mut hash_w, mut date_w) =
+        (0u16, 0u16, 0u16, 0u16, 0u16);
 
     for col in columns {
         match col.as_str() {
@@ -1240,7 +1272,10 @@ mod tests {
         state.height = 3;
         assert_eq!(state.search_state(), SearchState::Inactive);
         state.start_search();
-        assert!(matches!(state.search_state(), SearchState::Searching { .. }));
+        assert!(matches!(
+            state.search_state(),
+            SearchState::Searching { .. }
+        ));
         state.cancel_search();
         assert_eq!(state.search_state(), SearchState::Inactive);
     }
@@ -1266,7 +1301,11 @@ mod tests {
     #[test]
     fn diff_cache_hit_after_insert() {
         let mut cache = DiffCache::new();
-        cache.insert(hash("abc"), "src/main.rs".to_string(), "diff content".to_string());
+        cache.insert(
+            hash("abc"),
+            "src/main.rs".to_string(),
+            "diff content".to_string(),
+        );
         assert_eq!(cache.get(&hash("abc"), "src/main.rs"), Some("diff content"));
     }
 
@@ -1318,5 +1357,20 @@ mod tests {
         let widths = calc_cell_widths(80, 20, 6, 20, 10, &columns);
         assert_eq!(widths.len(), 3);
         assert!(matches!(widths[1], Constraint::Min(0)));
+    }
+
+    #[test]
+    fn render_graph_insets_first_terminal_column() {
+        let mut state = make_state(1);
+        state.commits[0].graph_line = "abc".to_string();
+        state.height = 1;
+
+        let area = Rect::new(0, 0, 4, 1);
+        let mut buf = Buffer::empty(area);
+
+        render_graph(&mut buf, area, &state);
+
+        assert_eq!(buf[(0, 0)].symbol(), " ");
+        assert_eq!(buf[(1, 0)].symbol(), "abc");
     }
 }

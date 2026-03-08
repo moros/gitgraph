@@ -63,7 +63,11 @@ impl ImageColors {
         edge: image::Rgba<u8>,
         background: image::Rgba<u8>,
     ) -> Self {
-        Self { branches, edge, background }
+        Self {
+            branches,
+            edge,
+            background,
+        }
     }
 }
 
@@ -101,6 +105,7 @@ pub struct GraphImageManager<'a> {
     image_params: ImageParams,
     drawing_pixels: DrawingPixels,
     image_protocol: ImageProtocol,
+    max_cell_width: u16,
 }
 
 impl<'a> GraphImageManager<'a> {
@@ -111,6 +116,7 @@ impl<'a> GraphImageManager<'a> {
         graph_style: GraphStyle,
         image_protocol: ImageProtocol,
         preload: bool,
+        max_cell_width: u16,
     ) -> Self {
         let image_params = ImageParams::new(image_colors, cell_width_type);
         let drawing_pixels = DrawingPixels::new(&image_params);
@@ -122,6 +128,7 @@ impl<'a> GraphImageManager<'a> {
             graph_style,
             image_params,
             drawing_pixels,
+            max_cell_width,
             image_protocol,
         };
         if preload {
@@ -153,8 +160,11 @@ impl<'a> GraphImageManager<'a> {
             .enumerate()
             .map(|(i, commit_hash)| {
                 let edges = &self.graph.edges[i];
-                let image =
-                    graph_image.images[edges].encode(self.cell_width_type, self.image_protocol);
+                let image = graph_image.images[edges].encode(
+                    self.cell_width_type,
+                    self.max_cell_width,
+                    self.image_protocol,
+                );
                 (commit_hash.clone(), image)
             })
             .collect();
@@ -187,6 +197,7 @@ impl<'a> GraphImageManager<'a> {
         let graph_style = self.graph_style;
         let cell_width_type = self.cell_width_type;
         let image_protocol = self.image_protocol;
+        let max_cell_width = self.max_cell_width;
 
         let new_entries: Vec<(CommitHash, String)> = to_render
             .into_par_iter()
@@ -198,7 +209,7 @@ impl<'a> GraphImageManager<'a> {
                     graph_style,
                     commit_hash,
                 );
-                let encoded = row_image.encode(cell_width_type, image_protocol);
+                let encoded = row_image.encode(cell_width_type, max_cell_width, image_protocol);
                 (commit_hash.clone(), encoded)
             })
             .collect();
@@ -220,7 +231,11 @@ impl<'a> GraphImageManager<'a> {
             self.graph_style,
             commit_hash,
         );
-        let image = graph_row_image.encode(self.cell_width_type, self.image_protocol);
+        let image = graph_row_image.encode(
+            self.cell_width_type,
+            self.max_cell_width,
+            self.image_protocol,
+        );
         self.encoded_image_map.insert(commit_hash.clone(), image);
     }
 }
@@ -233,9 +248,11 @@ pub struct GraphImage {
     pub images: HashMap<Vec<Edge>, GraphRowImage>,
 }
 
-/// A single rendered row: raw PNG bytes and the column count.
+/// A single rendered row: raw RGBA pixels, image dimensions, and lane count.
 pub struct GraphRowImage {
-    pub bytes: Vec<u8>,
+    pub pixels: Vec<u8>,
+    pub image_width: u32,
+    pub image_height: u32,
     pub cell_count: usize,
 }
 
@@ -243,20 +260,57 @@ impl Debug for GraphRowImage {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "GraphRowImage {{ bytes: [{} bytes], cell_count: {} }}",
-            self.bytes.len(),
+            "GraphRowImage {{ pixels: [{} bytes], image_width: {}, image_height: {}, cell_count: {} }}",
+            self.pixels.len(),
+            self.image_width,
+            self.image_height,
             self.cell_count
         )
     }
 }
 
 impl GraphRowImage {
-    fn encode(&self, cell_width_type: CellWidthType, image_protocol: ImageProtocol) -> String {
-        let image_cell_width = match cell_width_type {
+    fn png_bytes_and_cell_width(
+        &self,
+        cell_width_type: CellWidthType,
+        max_cell_width: u16,
+    ) -> (Vec<u8>, usize) {
+        let full_image_cell_width = match cell_width_type {
             CellWidthType::Double => self.cell_count * 2,
             CellWidthType::Single => self.cell_count,
         };
-        image_protocol.encode(&self.bytes, image_cell_width)
+        let image_cell_width = if max_cell_width > 0 {
+            full_image_cell_width.min(max_cell_width as usize)
+        } else {
+            full_image_cell_width
+        };
+
+        let png_bytes = if image_cell_width < full_image_cell_width {
+            let cropped_width =
+                cropped_pixel_width(self.image_width, full_image_cell_width, image_cell_width);
+            let cropped_pixels = crop_left_rgba(
+                &self.pixels,
+                self.image_width,
+                self.image_height,
+                cropped_width,
+            );
+            build_image(&cropped_pixels, cropped_width, self.image_height)
+        } else {
+            build_image(&self.pixels, self.image_width, self.image_height)
+        };
+
+        (png_bytes, image_cell_width)
+    }
+
+    fn encode(
+        &self,
+        cell_width_type: CellWidthType,
+        max_cell_width: u16,
+        image_protocol: ImageProtocol,
+    ) -> String {
+        let (png_bytes, image_cell_width) =
+            self.png_bytes_and_cell_width(cell_width_type, max_cell_width);
+        image_protocol.encode(&png_bytes, image_cell_width)
     }
 }
 
@@ -623,7 +677,11 @@ fn calc_corner_edge_drawing_pixels(
     let curve_center_y = base_center_y;
     let line_width = image_params.line_width as i32;
     let half_line_width = line_width / 2;
-    let adjust = if image_params.line_width.is_multiple_of(2) { 0 } else { 1 };
+    let adjust = if image_params.line_width.is_multiple_of(2) {
+        0
+    } else {
+        1
+    };
     let radius_base_length = image_params.corner_radius() as i32;
     let inner_radius = radius_base_length - half_line_width - adjust;
     let outer_radius = radius_base_length + half_line_width;
@@ -761,8 +819,12 @@ fn calc_graph_row_image(
         }
     }
 
-    let bytes = build_image(&img_buf, image_width, image_height);
-    GraphRowImage { bytes, cell_count }
+    GraphRowImage {
+        pixels: img_buf.into_raw(),
+        image_width,
+        image_height,
+        cell_count,
+    }
 }
 
 fn draw_background(
@@ -1020,6 +1082,33 @@ fn build_image(img_buf: &[u8], image_width: u32, image_height: u32) -> Vec<u8> {
     bytes.into_inner()
 }
 
+fn cropped_pixel_width(image_width: u32, full_cell_width: usize, clipped_cell_width: usize) -> u32 {
+    let pixels_per_terminal_cell = image_width / full_cell_width as u32;
+    (pixels_per_terminal_cell * clipped_cell_width as u32).min(image_width)
+}
+
+fn crop_left_rgba(
+    img_buf: &[u8],
+    image_width: u32,
+    image_height: u32,
+    cropped_width: u32,
+) -> Vec<u8> {
+    if cropped_width >= image_width {
+        return img_buf.to_vec();
+    }
+
+    let bytes_per_pixel = 4usize;
+    let row_stride = image_width as usize * bytes_per_pixel;
+    let cropped_row_stride = cropped_width as usize * bytes_per_pixel;
+    let mut cropped = Vec::with_capacity(cropped_row_stride * image_height as usize);
+
+    for row in img_buf.chunks_exact(row_stride) {
+        cropped.extend_from_slice(&row[..cropped_row_stride]);
+    }
+
+    cropped
+}
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -1093,11 +1182,8 @@ mod tests {
         use std::collections::HashMap;
 
         // Build a tiny linear graph: A → B → C (newest first)
-        let commit_data: Vec<(&str, Vec<&str>)> = vec![
-            ("A", vec!["B"]),
-            ("B", vec!["C"]),
-            ("C", vec![]),
-        ];
+        let commit_data: Vec<(&str, Vec<&str>)> =
+            vec![("A", vec!["B"]), ("B", vec!["C"]), ("C", vec![])];
 
         let commit_list: Vec<Commit> = commit_data
             .iter()
@@ -1133,6 +1219,7 @@ mod tests {
             GraphStyle::Angular,
             crate::protocol::ImageProtocol::Iterm2,
             false, // don't preload at construction
+            0,     // no max width cap
         );
 
         // Nothing loaded yet.
@@ -1159,10 +1246,12 @@ mod tests {
     fn graph_row_image_encode_iterm2() {
         use crate::protocol::ImageProtocol;
         let row = GraphRowImage {
-            bytes: b"fake-png".to_vec(),
+            pixels: vec![0; 150 * 4],
+            image_width: 150,
+            image_height: 1,
             cell_count: 3,
         };
-        let encoded = row.encode(CellWidthType::Double, ImageProtocol::Iterm2);
+        let encoded = row.encode(CellWidthType::Double, 0, ImageProtocol::Iterm2);
         assert!(encoded.contains("1337"));
         // cell_count * 2 = 6 cells for Double
         assert!(encoded.contains("width=6"));
@@ -1172,12 +1261,31 @@ mod tests {
     fn graph_row_image_encode_kitty() {
         use crate::protocol::ImageProtocol;
         let row = GraphRowImage {
-            bytes: b"fake-png".to_vec(),
+            pixels: vec![0; 75 * 4],
+            image_width: 75,
+            image_height: 1,
             cell_count: 3,
         };
-        let encoded = row.encode(CellWidthType::Single, ImageProtocol::Kitty);
+        let encoded = row.encode(CellWidthType::Single, 0, ImageProtocol::Kitty);
         assert!(encoded.contains("a=T"));
         // cell_count * 1 = 3 cells for Single
         assert!(encoded.contains("c=3"));
+    }
+
+    #[test]
+    fn graph_row_image_clips_pixels_instead_of_scaling_full_width() {
+        let row = GraphRowImage {
+            pixels: vec![0; 100 * 2 * 4],
+            image_width: 100,
+            image_height: 2,
+            cell_count: 4,
+        };
+
+        let (png_bytes, image_cell_width) = row.png_bytes_and_cell_width(CellWidthType::Single, 2);
+        let decoded = image::load_from_memory(&png_bytes).expect("cropped PNG should decode");
+
+        assert_eq!(image_cell_width, 2);
+        assert_eq!(decoded.width(), 50);
+        assert_eq!(decoded.height(), 2);
     }
 }
