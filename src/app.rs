@@ -259,8 +259,36 @@ impl App {
                     }
                 }
                 AppEvent::OpenHelp => {
-                    self.app_status.status_line =
-                        StatusLine::NotificationInfo("Help view not yet implemented".to_string());
+                    let before = std::mem::take(&mut self.view);
+                    self.view = View::of_help(before, self.config.clone(), self.tx.clone());
+                }
+                AppEvent::CloseHelp => {
+                    let current = std::mem::take(&mut self.view);
+                    if let Some(before) = current.take_help_before() {
+                        self.view = before;
+                    }
+                }
+                AppEvent::OpenUserCommand(slot) => {
+                    // Obtain the list state — prefer current List view, fall back to saved state.
+                    let list_state = if let Some(state) = self.view.take_list_state() {
+                        state
+                    } else if let Some(state) = self.saved_list_state.take() {
+                        state
+                    } else {
+                        continue;
+                    };
+                    self.view = View::of_user_command(
+                        list_state,
+                        slot,
+                        self.config.clone(),
+                        self.tx.clone(),
+                    );
+                }
+                AppEvent::CloseUserCommand => {
+                    if let Some(list_state) = self.view.take_list_state() {
+                        self.view =
+                            View::of_list(list_state, self.config.clone(), self.tx.clone());
+                    }
                 }
 
                 AppEvent::ClearStatusLine => {

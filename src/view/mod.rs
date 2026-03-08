@@ -1,6 +1,7 @@
 pub mod detail;
+pub mod help;
 pub mod list;
-pub mod refs;
+pub mod user_command;
 
 use crate::config::Config;
 use crate::event::Sender;
@@ -17,7 +18,8 @@ pub enum View {
     Default,
     List(Box<list::ListView>),
     Detail(Box<detail::DetailView>),
-    Refs(Box<refs::RefsView>),
+    Help(Box<help::HelpView>),
+    UserCommand(Box<user_command::UserCommandView>),
 }
 
 impl View {
@@ -26,7 +28,8 @@ impl View {
             View::Default => {}
             View::List(view) => view.handle_event(ewc, key),
             View::Detail(view) => view.handle_event(ewc, key),
-            View::Refs(view) => view.handle_event(ewc, key),
+            View::Help(view) => view.handle_event(ewc, key),
+            View::UserCommand(view) => view.handle_event(ewc, key),
         }
     }
 
@@ -35,7 +38,8 @@ impl View {
             View::Default => {}
             View::List(view) => view.render(f, area),
             View::Detail(view) => view.render(f, area),
-            View::Refs(view) => view.render(f, area),
+            View::Help(view) => view.render(f, area),
+            View::UserCommand(view) => view.render(f, area),
         }
     }
 
@@ -65,15 +69,19 @@ impl View {
         )))
     }
 
-    pub fn of_refs(
+    pub fn of_help(before: View, config: Rc<Config>, tx: Sender) -> Self {
+        View::Help(Box::new(help::HelpView::new(before, config, tx)))
+    }
+
+    pub fn of_user_command(
         commit_list_state: CommitListState,
-        all_refs: Vec<Ref>,
+        slot: u8,
         config: Rc<Config>,
         tx: Sender,
     ) -> Self {
-        View::Refs(Box::new(refs::RefsView::new(
+        View::UserCommand(Box::new(user_command::UserCommandView::new(
             commit_list_state,
-            all_refs,
+            slot,
             config,
             tx,
         )))
@@ -82,7 +90,16 @@ impl View {
     pub fn take_list_state(&mut self) -> Option<CommitListState> {
         match self {
             View::List(view) => view.take_list_state(),
-            View::Refs(view) => view.take_list_state(),
+            View::UserCommand(_) => {
+                // Take the view out to get the list state
+                let placeholder = std::mem::take(self);
+                if let View::UserCommand(ucv) = placeholder {
+                    let state = ucv.take_list_state();
+                    Some(state)
+                } else {
+                    None
+                }
+            }
             _ => None,
         }
     }
@@ -107,6 +124,15 @@ impl View {
         match self {
             View::List(view) => view.is_searching(),
             _ => false,
+        }
+    }
+
+    /// Take the `before` view from a HelpView, consuming self.
+    pub fn take_help_before(self) -> Option<View> {
+        if let View::Help(hv) = self {
+            Some(hv.before)
+        } else {
+            None
         }
     }
 }
