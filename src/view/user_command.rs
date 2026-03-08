@@ -248,7 +248,7 @@ impl UserCommandView {
 
         if matches!(def.kind, UserCommandKind::Silent) {
             // Silent commands: run in background, don't capture output
-            let _ = execute_silent_command(def.commands.clone(), commit, refs);
+            execute_silent_command(def.commands.clone(), commit, refs);
             return vec![];
         }
 
