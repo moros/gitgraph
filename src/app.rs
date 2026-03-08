@@ -15,7 +15,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Stylize},
     text::Line,
-    widgets::{Block, Borders, Padding, Paragraph},
+    widgets::{Block, Borders, Clear, Padding, Paragraph},
     Frame, Terminal,
 };
 use rustc_hash::FxHashMap;
@@ -59,6 +59,10 @@ struct AppStatus {
     status_line: StatusLine,
     numeric_prefix: String,
     view_area: Rect,
+    /// When true, the next render emits a full-screen Clear before drawing the
+    /// new view.  Set on every view transition so ratatui's diff-based renderer
+    /// resets all cells and prevents text bleed-through.
+    clear: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -313,7 +317,7 @@ impl App {
                         if idx < list_state.commits.len() {
                             let commit_info = list_state.commits[idx].clone();
                             self.saved_list_state = Some(list_state);
-                            self.clear_images();
+                            self.transition();
                             self.view = View::of_detail(
                                 commit_info,
                                 idx,
@@ -328,7 +332,7 @@ impl App {
                 }
                 AppEvent::CloseDetail => {
                     if let Some(list_state) = self.saved_list_state.take() {
-                        self.clear_images();
+                        self.transition();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
@@ -341,7 +345,7 @@ impl App {
                 }
                 AppEvent::OpenRefs => {
                     if let Some(list_state) = self.view.take_list_state() {
-                        self.clear_images();
+                        self.transition();
                         self.view = View::of_refs(
                             list_state,
                             self.all_refs.clone(),
@@ -352,18 +356,18 @@ impl App {
                 }
                 AppEvent::CloseRefs => {
                     if let Some(list_state) = self.view.take_list_state() {
-                        self.clear_images();
+                        self.transition();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
                 }
                 AppEvent::OpenHelp => {
-                    self.clear_images();
+                    self.transition();
                     let before = std::mem::take(&mut self.view);
                     self.view = View::of_help(before, self.config.clone(), self.tx.clone());
                 }
                 AppEvent::CloseHelp => {
-                    self.clear_images();
+                    self.transition();
                     let current = std::mem::take(&mut self.view);
                     if let Some(before) = current.take_help_before() {
                         self.view = before;
@@ -378,7 +382,7 @@ impl App {
                     } else {
                         continue;
                     };
-                    self.clear_images();
+                    self.transition();
                     self.view = View::of_user_command(
                         list_state,
                         slot,
@@ -388,7 +392,7 @@ impl App {
                 }
                 AppEvent::CloseUserCommand => {
                     if let Some(list_state) = self.view.take_list_state() {
-                        self.clear_images();
+                        self.transition();
                         self.view =
                             View::of_list(list_state, self.config.clone(), self.tx.clone());
                     }
@@ -421,6 +425,16 @@ impl App {
     }
 
     fn render(&mut self, f: &mut Frame) {
+        // Clear frame: on view transitions emit a full-screen Clear so ratatui's
+        // diff-based renderer resets all cells.  Return early — the next frame
+        // will draw the new view on a clean canvas.
+        if self.app_status.clear {
+            f.render_widget(Clear, f.area());
+            self.clear_images();
+            self.app_status.clear = false;
+            return;
+        }
+
         // Background fill
         let base = Block::default().bg(Color::Reset);
         f.render_widget(base, f.area());
@@ -520,10 +534,18 @@ impl App {
         }
     }
 
-    /// Clear all terminal inline images from the graphics layer.
+    /// Prepare for a view transition: schedule a clear frame and clear images.
     ///
-    /// Must be called before transitioning away from the list view so that
-    /// graph images do not bleed through into detail/refs/help views.
+    /// Sets `app_status.clear` so the next render emits a full-screen
+    /// [`Clear`] widget before drawing the incoming view, preventing ratatui
+    /// text bleed-through.  Also clears any terminal inline images immediately
+    /// so they do not persist into the new view.
+    fn transition(&mut self) {
+        self.app_status.clear = true;
+        self.clear_images();
+    }
+
+    /// Clear all terminal inline images from the graphics layer.
     fn clear_images(&self) {
         if let Some(protocol) = &self.image_protocol {
             protocol.clear_all();
