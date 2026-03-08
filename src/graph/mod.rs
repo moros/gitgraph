@@ -2,12 +2,14 @@
 pub mod calc;
 pub mod geometry;
 pub mod image;
+pub mod text;
 
 use std::collections::HashMap;
 
 use crate::git::CommitHash;
 
 pub use calc::calc_graph;
+pub use text::render_text_row;
 
 /// A 2D grid position in the commit graph (lane x, row y).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

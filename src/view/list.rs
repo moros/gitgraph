@@ -165,6 +165,9 @@ impl ListView {
             UserEvent::HelpToggle => {
                 self.tx.send(AppEvent::OpenHelp);
             }
+            UserEvent::Refresh => {
+                self.tx.send(AppEvent::Refresh);
+            }
             UserEvent::UserCommand => {
                 let slot = ewc.count.unwrap_or(1).clamp(1, 9) as u8;
                 self.tx.send(AppEvent::OpenUserCommand(slot));
