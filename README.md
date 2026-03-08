@@ -6,7 +6,7 @@
 
 ![List View](images/list-view.png)
 
-![Detail View](images/detail-view.png)
+![Detail View](images/detail-view.png?v=2)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
