@@ -70,7 +70,7 @@ pub enum UserEvent {
     CopyShortHash,
     /// Copy full 40-char hash to clipboard
     CopyFullHash,
-    /// Run configured user command (user_command_1 by default)
+    /// Run configured user command (slot given by numeric prefix, default 1)
     UserCommand,
 
     // ── Detail view ────────────────────────────────────────────────────────
@@ -128,6 +128,7 @@ impl UserEvent {
                 | UserEvent::JumpToParent
                 | UserEvent::SearchNext
                 | UserEvent::SearchPrev
+                | UserEvent::UserCommand
         )
     }
 }
@@ -397,6 +398,54 @@ impl KeyBind {
     pub fn iter(&self) -> impl Iterator<Item = (&KeyEvent, &UserEvent)> {
         self.map.iter()
     }
+
+    /// Return all key strings bound to the given event, sorted for stable display.
+    pub fn keys_for_event(&self, event: UserEvent) -> Vec<String> {
+        let mut keys: Vec<String> = self
+            .map
+            .iter()
+            .filter(|(_, v)| **v == event)
+            .map(|(k, _)| format_key_event(k))
+            .collect();
+        keys.sort();
+        keys
+    }
+}
+
+/// Format a `KeyEvent` back into a human-readable key string (e.g. `"ctrl-d"`, `"?"`).
+pub fn format_key_event(key: &KeyEvent) -> String {
+    let mut s = String::new();
+    if key.modifiers.contains(KeyModifiers::CONTROL) {
+        s.push_str("ctrl-");
+    }
+    if key.modifiers.contains(KeyModifiers::ALT) {
+        s.push_str("alt-");
+    }
+    // SHIFT prefix only for named keys — uppercase chars already carry shift visually
+    let is_char = matches!(key.code, KeyCode::Char(_));
+    if key.modifiers.contains(KeyModifiers::SHIFT) && !is_char {
+        s.push_str("shift-");
+    }
+    match key.code {
+        KeyCode::Char(c) => s.push(c),
+        KeyCode::Enter => s.push_str("enter"),
+        KeyCode::Esc => s.push_str("esc"),
+        KeyCode::Tab => s.push_str("tab"),
+        KeyCode::Backspace => s.push_str("backspace"),
+        KeyCode::Delete => s.push_str("delete"),
+        KeyCode::Insert => s.push_str("insert"),
+        KeyCode::Home => s.push_str("home"),
+        KeyCode::End => s.push_str("end"),
+        KeyCode::PageUp => s.push_str("pageup"),
+        KeyCode::PageDown => s.push_str("pagedown"),
+        KeyCode::Up => s.push_str("up"),
+        KeyCode::Down => s.push_str("down"),
+        KeyCode::Left => s.push_str("left"),
+        KeyCode::Right => s.push_str("right"),
+        KeyCode::F(n) => s.push_str(&format!("f{n}")),
+        _ => s.push_str("?"),
+    }
+    s
 }
 
 // ---------------------------------------------------------------------------

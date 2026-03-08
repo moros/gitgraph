@@ -11,6 +11,8 @@ use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
+use crate::git::Ref;
+
 use crate::git::commit::CommitHash;
 use crate::git::diff::FileDiff;
 
@@ -152,6 +154,134 @@ pub fn execute_external_diff(
             ..Default::default()
         },
     }
+}
+
+// ---------------------------------------------------------------------------
+// User command execution
+// ---------------------------------------------------------------------------
+
+const USER_CMD_MARKER_PREFIX: &str = "{{";
+const USER_CMD_TARGET_HASH: &str = "{{target_hash}}";
+const USER_CMD_FIRST_PARENT_HASH: &str = "{{first_parent_hash}}";
+const USER_CMD_PARENT_HASHES: &str = "{{parent_hashes}}";
+const USER_CMD_REFS: &str = "{{refs}}";
+const USER_CMD_BRANCHES: &str = "{{branches}}";
+const USER_CMD_REMOTE_BRANCHES: &str = "{{remote_branches}}";
+const USER_CMD_TAGS: &str = "{{tags}}";
+const USER_CMD_AREA_WIDTH: &str = "{{area_width}}";
+const USER_CMD_AREA_HEIGHT: &str = "{{area_height}}";
+
+/// All context needed for template substitution in a user command.
+pub struct ExternalCommandParameters {
+    pub command: Vec<String>,
+    pub target_hash: String,
+    pub parent_hashes: Vec<String>,
+    pub all_refs: Vec<String>,
+    pub branches: Vec<String>,
+    pub remote_branches: Vec<String>,
+    pub tags: Vec<String>,
+    pub area_width: u16,
+    pub area_height: u16,
+}
+
+impl ExternalCommandParameters {
+    /// Build parameters from a commit info and refs.
+    pub fn from_commit(
+        command: Vec<String>,
+        target_hash: String,
+        parent_hashes: Vec<String>,
+        refs: &[Ref],
+        area_width: u16,
+        area_height: u16,
+    ) -> Self {
+        let branches: Vec<String> = refs
+            .iter()
+            .filter(|r| matches!(r, Ref::Branch { .. }))
+            .map(|r| r.name().to_string())
+            .collect();
+        let remote_branches: Vec<String> = refs
+            .iter()
+            .filter(|r| matches!(r, Ref::RemoteBranch { .. }))
+            .map(|r| r.name().to_string())
+            .collect();
+        let tags: Vec<String> = refs
+            .iter()
+            .filter(|r| matches!(r, Ref::Tag { .. }))
+            .map(|r| r.name().to_string())
+            .collect();
+        let all_refs: Vec<String> = refs
+            .iter()
+            .filter(|r| !matches!(r, Ref::Stash { .. }))
+            .map(|r| r.name().to_string())
+            .collect();
+        Self {
+            command,
+            target_hash,
+            parent_hashes,
+            all_refs,
+            branches,
+            remote_branches,
+            tags,
+            area_width,
+            area_height,
+        }
+    }
+}
+
+/// Execute a user command with template substitution, returning captured stdout.
+pub fn exec_user_command(params: ExternalCommandParameters) -> Result<String, String> {
+    if params.command.is_empty() {
+        return Err("Empty command".to_string());
+    }
+
+    let mut argv: Vec<String> = Vec::with_capacity(params.command.len());
+    for arg in &params.command {
+        match arg.as_str() {
+            // Standalone markers expand into multiple args so spaces in values work correctly.
+            USER_CMD_BRANCHES => argv.extend(params.branches.clone()),
+            USER_CMD_REMOTE_BRANCHES => argv.extend(params.remote_branches.clone()),
+            USER_CMD_TAGS => argv.extend(params.tags.clone()),
+            USER_CMD_REFS => argv.extend(params.all_refs.clone()),
+            USER_CMD_PARENT_HASHES => argv.extend(params.parent_hashes.clone()),
+            _ => argv.push(replace_user_cmd_arg(arg, &params)),
+        }
+    }
+
+    if argv.is_empty() {
+        return Err("Command expanded to empty argv".to_string());
+    }
+
+    let output = Command::new(&argv[0])
+        .args(&argv[1..])
+        .output()
+        .map_err(|e| format!("Failed to execute '{}': {e}", argv[0]))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Command exited with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn replace_user_cmd_arg(s: &str, params: &ExternalCommandParameters) -> String {
+    if !s.contains(USER_CMD_MARKER_PREFIX) {
+        return s.to_string();
+    }
+    let sep = " ";
+    let first_parent = params.parent_hashes.first().map(|s| s.as_str()).unwrap_or("");
+    s.replace(USER_CMD_TARGET_HASH, &params.target_hash)
+        .replace(USER_CMD_FIRST_PARENT_HASH, first_parent)
+        .replace(USER_CMD_PARENT_HASHES, &params.parent_hashes.join(sep))
+        .replace(USER_CMD_REFS, &params.all_refs.join(sep))
+        .replace(USER_CMD_BRANCHES, &params.branches.join(sep))
+        .replace(USER_CMD_REMOTE_BRANCHES, &params.remote_branches.join(sep))
+        .replace(USER_CMD_TAGS, &params.tags.join(sep))
+        .replace(USER_CMD_AREA_WIDTH, &params.area_width.to_string())
+        .replace(USER_CMD_AREA_HEIGHT, &params.area_height.to_string())
 }
 
 #[cfg(test)]

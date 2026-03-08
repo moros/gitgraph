@@ -12,6 +12,10 @@ pub enum AppEvent {
     OpenDetail,
     OpenRefs,
     OpenHelp,
+    CloseHelp,
+    /// Open user command view for the given slot (1–9).
+    OpenUserCommand(u8),
+    CloseUserCommand,
     /// Close the detail view and return to the list view.
     CloseDetail,
     /// Navigate to the next commit while staying in detail view.
