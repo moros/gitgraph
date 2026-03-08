@@ -90,7 +90,170 @@ pub fn get_initial_commit_additions(path: &Path, commit_hash: &CommitHash) -> Ve
     changes
 }
 
-/// Stub for Phase 4: returns full diff content for a single file.
-pub fn file_diff(_parent: &CommitHash, _commit: &CommitHash, _filepath: &str) -> FileDiff {
-    FileDiff::default()
+/// Returns the full unified diff for a single file between parent and commit.
+///
+/// For initial commits (no parent / empty parent hash), synthesises a diff
+/// showing every line as added via `git show commit:filepath`.
+pub fn file_diff(path: &Path, parent: &CommitHash, commit: &CommitHash, filepath: &str) -> FileDiff {
+    let is_initial = parent.as_str().is_empty();
+
+    let raw = if is_initial {
+        get_initial_file_content(path, commit, filepath)
+    } else {
+        get_diff_output(path, parent, commit, filepath)
+    };
+
+    parse_file_diff(filepath, &raw)
+}
+
+/// Run `git diff --color=never parent..commit -- filepath`.
+fn get_diff_output(path: &Path, parent: &CommitHash, commit: &CommitHash, filepath: &str) -> String {
+    let output = Command::new("git")
+        .arg("diff")
+        .arg("--color=never")
+        .arg(format!("{}..{}", parent.as_str(), commit.as_str()))
+        .arg("--")
+        .arg(filepath)
+        .current_dir(path)
+        .output();
+
+    match output {
+        Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+        Err(_) => String::new(),
+    }
+}
+
+/// For initial commits, synthesise a unified diff from `git show commit:filepath`.
+fn get_initial_file_content(path: &Path, commit: &CommitHash, filepath: &str) -> String {
+    let output = Command::new("git")
+        .arg("show")
+        .arg(format!("{}:{}", commit.as_str(), filepath))
+        .current_dir(path)
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let content = String::from_utf8_lossy(&o.stdout).into_owned();
+            let line_count = content.lines().count();
+            let mut diff = format!(
+                "diff --git a/{fp} b/{fp}\nnew file mode 100644\n--- /dev/null\n+++ b/{fp}\n@@ -0,0 +1,{n} @@\n",
+                fp = filepath,
+                n = line_count,
+            );
+            for line in content.lines() {
+                diff.push('+');
+                diff.push_str(line);
+                diff.push('\n');
+            }
+            diff
+        }
+        _ => String::new(),
+    }
+}
+
+/// Parse a raw unified diff string into a FileDiff, extracting stats and paths.
+fn parse_file_diff(filepath: &str, raw: &str) -> FileDiff {
+    let mut result = FileDiff {
+        filename: filepath.to_string(),
+        content: raw.to_string(),
+        ..Default::default()
+    };
+
+    for line in raw.lines() {
+        if let Some(stripped) = line.strip_prefix("--- ") {
+            result.old_path = Some(stripped.to_string());
+        } else if let Some(stripped) = line.strip_prefix("+++ ") {
+            result.new_path = Some(stripped.to_string());
+        } else if line.starts_with('+') && !line.starts_with("+++") {
+            result.added_lines += 1;
+        } else if line.starts_with('-') && !line.starts_with("---") {
+            result.removed_lines += 1;
+        }
+    }
+
+    result
+}
+
+/// Get diff output rendered by an external diff tool (e.g. difftastic).
+///
+/// Uses `git -c diff.external=<tool> diff parent..commit -- filepath`.
+/// Falls back to a synthesised diff for initial commits.
+pub fn get_file_diff_with_tool(
+    path: &Path,
+    parent: &CommitHash,
+    commit: &CommitHash,
+    filepath: &str,
+    external_cmd: &str,
+) -> FileDiff {
+    let is_initial = parent.as_str().is_empty();
+
+    let raw = if is_initial {
+        get_initial_file_content(path, commit, filepath)
+    } else {
+        let output = Command::new("git")
+            .arg("-c")
+            .arg(format!("diff.external={external_cmd}"))
+            .arg("diff")
+            .arg(format!("{}..{}", parent.as_str(), commit.as_str()))
+            .arg("--")
+            .arg(filepath)
+            .current_dir(path)
+            .output();
+
+        match output {
+            Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+            Err(_) => String::new(),
+        }
+    };
+
+    FileDiff {
+        filename: filepath.to_string(),
+        content: raw,
+        ..Default::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_file_diff_stats() {
+        let raw = "diff --git a/foo.rs b/foo.rs\n\
+--- a/foo.rs\n\
++++ b/foo.rs\n\
+@@ -1,3 +1,3 @@\n\
+ fn main() {\n\
+-    println!(\"Hello\");\n\
++    println!(\"Hello, World!\");\n\
+ }\n";
+
+        let diff = parse_file_diff("foo.rs", raw);
+        assert_eq!(diff.filename, "foo.rs");
+        assert_eq!(diff.added_lines, 1);
+        assert_eq!(diff.removed_lines, 1);
+        assert_eq!(diff.old_path, Some("a/foo.rs".to_string()));
+        assert_eq!(diff.new_path, Some("b/foo.rs".to_string()));
+    }
+
+    #[test]
+    fn test_parse_file_diff_empty() {
+        let diff = parse_file_diff("bar.rs", "");
+        assert_eq!(diff.filename, "bar.rs");
+        assert_eq!(diff.added_lines, 0);
+        assert_eq!(diff.removed_lines, 0);
+        assert!(diff.old_path.is_none());
+        assert!(diff.new_path.is_none());
+    }
+
+    #[test]
+    fn test_initial_diff_synthesised() {
+        let mut diff = "diff --git a/test.rs b/test.rs\nnew file mode 100644\n--- /dev/null\n+++ b/test.rs\n@@ -0,0 +1,2 @@\n".to_string();
+        diff.push_str("+line one\n+line two\n");
+
+        let parsed = parse_file_diff("test.rs", &diff);
+        assert_eq!(parsed.added_lines, 2);
+        assert_eq!(parsed.removed_lines, 0);
+        assert_eq!(parsed.new_path, Some("b/test.rs".to_string()));
+    }
 }

@@ -2,6 +2,7 @@ pub mod app;
 pub mod color;
 pub mod config;
 pub mod event;
+pub mod external;
 pub mod git;
 pub mod graph;
 pub mod keybind;
