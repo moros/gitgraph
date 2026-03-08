@@ -44,7 +44,7 @@
 
 ## Requirements
 
-- Rust 1.75+ (for building from source)
+- Rust 1.70+ (for building from source)
 - A terminal with [iTerm2](https://iterm2.com/) or [Kitty](https://sw.kovidgoyal.net/kitty/) image protocol support for graph images (optional — text graph fallback is available)
 - [Nerd Fonts](https://www.nerdfonts.com/) for file icons (optional but recommended)
 - Git 2.x
@@ -54,7 +54,7 @@
 ### From source
 
 ```bash
-git clone https://github.com/yourusername/gitpeek
+# Clone or download the source
 cd gitpeek
 cargo install --path .
 ```
@@ -414,6 +414,3 @@ gitpeek is written in Rust and uses [ratatui](https://ratatui.rs/) for the TUI. 
 | Nerd Font icons | — | ✓ | ✓ |
 | Config format | TOML | YAML | TOML |
 
-## License
-
-MIT
