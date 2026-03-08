@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{List, ListItem, StatefulWidget, Widget},
 };
 use rustc_hash::FxHashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use tui_input::backend::crossterm::EventHandler as TuiInputEventHandler;
 use tui_input::Input;
@@ -23,6 +23,75 @@ use tui_input::Input;
 static FUZZY_MATCHER: Lazy<SkimMatcherV2> = Lazy::new(SkimMatcherV2::default);
 
 const ELLIPSIS: &str = "...";
+
+// ---------------------------------------------------------------------------
+// DiffCache — LRU cache for file diff content
+// ---------------------------------------------------------------------------
+
+const DIFF_CACHE_CAPACITY: usize = 64;
+
+/// LRU cache for file diff content keyed by `(commit_hash, filepath)`.
+///
+/// When navigating commits with J/K, revisiting a previously-viewed diff is
+/// served from this cache instead of re-running the git diff subprocess.
+/// Eviction follows FIFO order (oldest-inserted entry evicted when full).
+#[derive(Debug)]
+pub struct DiffCache {
+    map: HashMap<(CommitHash, String), String>,
+    /// Insertion-order queue used for eviction.
+    order: VecDeque<(CommitHash, String)>,
+    capacity: usize,
+}
+
+impl Default for DiffCache {
+    fn default() -> Self {
+        Self {
+            map: HashMap::with_capacity(DIFF_CACHE_CAPACITY),
+            order: VecDeque::with_capacity(DIFF_CACHE_CAPACITY),
+            capacity: DIFF_CACHE_CAPACITY,
+        }
+    }
+}
+
+impl DiffCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Return cached diff content for `(commit_hash, filepath)`, if present.
+    pub fn get(&self, commit_hash: &CommitHash, filepath: &str) -> Option<&str> {
+        self.map
+            .get(&(commit_hash.clone(), filepath.to_string()))
+            .map(|s| s.as_str())
+    }
+
+    /// Insert diff content for `(commit_hash, filepath)`.
+    ///
+    /// No-op if the entry is already cached.  Evicts the oldest entry when
+    /// the cache is at capacity.
+    pub fn insert(&mut self, commit_hash: CommitHash, filepath: String, content: String) {
+        let key = (commit_hash, filepath);
+        if self.map.contains_key(&key) {
+            return;
+        }
+        if self.map.len() >= self.capacity {
+            if let Some(oldest) = self.order.pop_front() {
+                self.map.remove(&oldest);
+            }
+        }
+        self.order.push_back(key.clone());
+        self.map.insert(key, content);
+    }
+
+    /// Number of entries currently in the cache.
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // CommitInfo
@@ -211,6 +280,9 @@ pub struct CommitListState {
 
     default_ignore_case: bool,
     default_fuzzy: bool,
+
+    /// LRU cache for file diff content; keyed by (commit_hash, filepath).
+    pub diff_cache: DiffCache,
 }
 
 impl CommitListState {
@@ -240,6 +312,7 @@ impl CommitListState {
             height: 0,
             default_ignore_case,
             default_fuzzy,
+            diff_cache: DiffCache::new(),
         }
     }
 
@@ -1176,6 +1249,63 @@ mod tests {
     fn format_date_valid() {
         let s = format_date("2024-01-15T10:00:00+00:00", "%Y-%m-%d", false);
         assert_eq!(s, "2024-01-15");
+    }
+
+    // ── DiffCache ───────────────────────────────────────────────────────────
+
+    fn hash(s: &str) -> CommitHash {
+        CommitHash::from(s)
+    }
+
+    #[test]
+    fn diff_cache_miss_returns_none() {
+        let cache = DiffCache::new();
+        assert!(cache.get(&hash("abc"), "src/main.rs").is_none());
+    }
+
+    #[test]
+    fn diff_cache_hit_after_insert() {
+        let mut cache = DiffCache::new();
+        cache.insert(hash("abc"), "src/main.rs".to_string(), "diff content".to_string());
+        assert_eq!(cache.get(&hash("abc"), "src/main.rs"), Some("diff content"));
+    }
+
+    #[test]
+    fn diff_cache_different_keys_independent() {
+        let mut cache = DiffCache::new();
+        cache.insert(hash("abc"), "foo.rs".to_string(), "diff-a".to_string());
+        cache.insert(hash("abc"), "bar.rs".to_string(), "diff-b".to_string());
+        assert_eq!(cache.get(&hash("abc"), "foo.rs"), Some("diff-a"));
+        assert_eq!(cache.get(&hash("abc"), "bar.rs"), Some("diff-b"));
+    }
+
+    #[test]
+    fn diff_cache_no_duplicate_on_repeated_insert() {
+        let mut cache = DiffCache::new();
+        cache.insert(hash("abc"), "foo.rs".to_string(), "v1".to_string());
+        cache.insert(hash("abc"), "foo.rs".to_string(), "v2".to_string());
+        // First insert wins; duplicate is a no-op.
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn diff_cache_evicts_oldest_when_full() {
+        let mut cache = DiffCache::new();
+        // Fill beyond default capacity (64); first entry should be evicted.
+        for i in 0..=DIFF_CACHE_CAPACITY {
+            cache.insert(
+                hash(&format!("{i:040}")),
+                "file.rs".to_string(),
+                format!("diff-{i}"),
+            );
+        }
+        assert_eq!(cache.len(), DIFF_CACHE_CAPACITY);
+        // The very first entry (i=0) should have been evicted.
+        assert!(cache.get(&hash(&format!("{:040}", 0)), "file.rs").is_none());
+        // The last entry should be present.
+        assert!(cache
+            .get(&hash(&format!("{:040}", DIFF_CACHE_CAPACITY)), "file.rs")
+            .is_some());
     }
 
     #[test]
