@@ -1,4 +1,4 @@
-//! Integration tests for gitpeek core flows.
+//! Integration tests for gitgraph core flows.
 //!
 //! Each test section exercises a distinct subsystem using real git repositories
 //! (created in temp dirs) or purely in-memory data structures.
@@ -11,9 +11,9 @@ use std::sync::Mutex;
 
 use tempfile::TempDir;
 
-use gitpeek::git::{CommitHash, FileChange, LogOrder, Repository};
-use gitpeek::graph::calc_graph;
-use gitpeek::tree::FileTreeNode;
+use gitgraph::git::{CommitHash, FileChange, LogOrder, Repository};
+use gitgraph::graph::calc_graph;
+use gitgraph::tree::FileTreeNode;
 
 // ---------------------------------------------------------------------------
 // Mutex to serialise tests that call std::env::set_current_dir.
@@ -131,7 +131,7 @@ fn test_repo_ref_resolution() {
 
     // HEAD should be on branch "main".
     match repo.head() {
-        gitpeek::git::Head::Branch { name } => assert_eq!(name, "main"),
+        gitgraph::git::Head::Branch { name } => assert_eq!(name, "main"),
         other => panic!("expected Head::Branch, got {other:?}"),
     }
 
@@ -139,7 +139,7 @@ fn test_repo_ref_resolution() {
     let oldest_hash = CommitHash::from(hashes[0].as_str());
     let refs = repo.refs(&oldest_hash);
     let tag_names: Vec<&str> = refs.iter().filter_map(|r| {
-        if let gitpeek::git::Ref::Tag { name, .. } = r {
+        if let gitgraph::git::Ref::Tag { name, .. } = r {
             Some(name.as_str())
         } else {
             None
@@ -151,7 +151,7 @@ fn test_repo_ref_resolution() {
     let newest_hash = CommitHash::from(hashes[1].as_str());
     let newest_refs = repo.refs(&newest_hash);
     let branch_names: Vec<&str> = newest_refs.iter().filter_map(|r| {
-        if let gitpeek::git::Ref::Branch { name, .. } = r {
+        if let gitgraph::git::Ref::Branch { name, .. } = r {
             Some(name.as_str())
         } else {
             None
@@ -202,7 +202,7 @@ fn test_calc_graph_linear_repo() {
 
 #[test]
 fn test_diff_summary_real_repo() {
-    use gitpeek::git::diff::get_diff_summary;
+    use gitgraph::git::diff::get_diff_summary;
 
     let tmp = TempDir::new().unwrap();
     let hashes = init_repo_with_commits(tmp.path(), 2);
@@ -224,7 +224,7 @@ fn test_diff_summary_real_repo() {
 
 #[test]
 fn test_file_diff_initial_commit() {
-    use gitpeek::git::diff::file_diff;
+    use gitgraph::git::diff::file_diff;
 
     let tmp = TempDir::new().unwrap();
     let hashes = init_repo_with_commits(tmp.path(), 1);
@@ -327,7 +327,7 @@ fn test_file_tree_flatten_respects_collapse() {
 
 #[test]
 fn test_config_load_partial_toml() {
-    use gitpeek::config::{Config, GraphStyle, GraphWidth, OrderType};
+    use gitgraph::config::{Config, GraphStyle, GraphWidth, OrderType};
 
     let tmp = TempDir::new().unwrap();
     let config_path = tmp.path().join("test_config.toml");
@@ -349,9 +349,9 @@ subject_min_width = 42
 
     // Serialise the env var access — set_var is not thread-safe.
     let _lock = CWD_MUTEX.lock().unwrap();
-    std::env::set_var("GITPEEK_CONFIG_FILE", config_path.to_str().unwrap());
+    std::env::set_var("GITGRAPH_CONFIG_FILE", config_path.to_str().unwrap());
     let result = Config::load();
-    std::env::remove_var("GITPEEK_CONFIG_FILE");
+    std::env::remove_var("GITGRAPH_CONFIG_FILE");
     drop(_lock);
 
     let config = result.expect("Config::load should succeed with partial TOML");
@@ -369,13 +369,13 @@ subject_min_width = 42
 
 #[test]
 fn test_config_load_defaults_when_no_file() {
-    use gitpeek::config::{Config, GraphStyle, GraphWidth, OrderType};
+    use gitgraph::config::{Config, GraphStyle, GraphWidth, OrderType};
 
     // Point the env var at a path that doesn't exist.
     let _lock = CWD_MUTEX.lock().unwrap();
-    std::env::set_var("GITPEEK_CONFIG_FILE", "/tmp/__gitpeek_nonexistent_config__.toml");
+    std::env::set_var("GITGRAPH_CONFIG_FILE", "/tmp/__gitgraph_nonexistent_config__.toml");
     let result = Config::load();
-    std::env::remove_var("GITPEEK_CONFIG_FILE");
+    std::env::remove_var("GITGRAPH_CONFIG_FILE");
     drop(_lock);
 
     let config = result.expect("Config::load should succeed with missing file (use defaults)");

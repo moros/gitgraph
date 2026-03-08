@@ -1,11 +1,11 @@
 [package]
-name = "gitpeek"
+name = "gitgraph"
 version = "0.1.0"
 edition = "2021"
 description = "A TUI git commit explorer combining git log graph with file tree diff viewing"
 
 [[bin]]
-name = "gpeek"
+name = "gg"
 path = "src/main.rs"
 
 [dependencies]

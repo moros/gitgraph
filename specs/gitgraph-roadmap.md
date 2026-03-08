@@ -1,18 +1,18 @@
-# gitpeek Roadmap Spec
+# gitgraph Roadmap Spec
 
-> Command: `gpeek`
+> Command: `gg`
 > A TUI that combines serie's git log graph with ftdv's tree diff viewing into a unified commit exploration tool.
 
 ---
 
 ## 1. Project Overview
 
-**gitpeek** (command: `gpeek`) is a terminal-based git commit explorer that merges two complementary workflows:
+**gitgraph** (command: `gg`) is a terminal-based git commit explorer that merges two complementary workflows:
 
 - **serie** — A git log TUI that renders image-based commit graphs (iTerm2/Kitty protocols) with a navigable commit list, detail view, refs browser, and configurable user commands.
 - **ftdv** — A file tree diff viewer that shows a collapsible file tree alongside inline diff content, with external diff tool integration and checkbox persistence.
 
-**gitpeek combines these** into a single tool: browse the commit graph (serie-style), select a commit, and explore its changes through a file tree with inline diffs (ftdv-style) — all without leaving the terminal.
+**gitgraph combines these** into a single tool: browse the commit graph (serie-style), select a commit, and explore its changes through a file tree with inline diffs (ftdv-style) — all without leaving the terminal.
 
 ### Design Principles
 
@@ -158,7 +158,7 @@ CLI args (clap)
 
 ## 4. View System Design
 
-gitpeek has 5 views, extending serie's view system with ftdv's diff capabilities integrated into the detail view.
+gitgraph has 5 views, extending serie's view system with ftdv's diff capabilities integrated into the detail view.
 
 ### 4.1 View Enum
 
@@ -207,7 +207,7 @@ The primary view. Displays a scrollable commit list with configurable columns.
 
 ### 4.3 DetailView (enhanced with file tree + diff)
 
-**This is the key innovation of gitpeek.** When you press Enter on a commit in ListView, the DetailView shows commit metadata AND a file tree with inline diffs — combining serie's detail panel with ftdv's core functionality.
+**This is the key innovation of gitgraph.** When you press Enter on a commit in ListView, the DetailView shows commit metadata AND a file tree with inline diffs — combining serie's detail panel with ftdv's core functionality.
 
 **Layout:**
 ```
@@ -282,7 +282,7 @@ Split panel showing output of user-defined commands (e.g., `git diff`, custom sc
 
 ## 5. File Tree Widget
 
-The file tree widget is gitpeek's adaptation of ftdv's tree system, redesigned as a standalone ratatui widget.
+The file tree widget is gitgraph's adaptation of ftdv's tree system, redesigned as a standalone ratatui widget.
 
 ### 5.1 Data Structures
 
@@ -373,7 +373,7 @@ struct DiffViewerState {
 
 Two modes for obtaining diff content:
 
-1. **Internal** (default): `git diff <parent>..<commit> -- <file_path>` with `--color=never`. Parsed and styled by gitpeek.
+1. **Internal** (default): `git diff <parent>..<commit> -- <file_path>` with `--color=never`. Parsed and styled by gitgraph.
 2. **External tool**: `git -c diff.external=<cmd> diff --ext-diff` or piping through a pager (delta, bat). ANSI output parsed via `ansi-to-tui`.
 
 External tool integration follows ftdv's approach:
@@ -710,9 +710,9 @@ Future optimization: LRU cache for file diffs of recently viewed commits to spee
 ### 11.1 Config File Location
 
 Resolution order (serie's approach):
-1. `GITPEEK_CONFIG_FILE` environment variable
-2. `$XDG_CONFIG_HOME/gitpeek/config.toml`
-3. `~/.config/gitpeek/config.toml`
+1. `GITGRAPH_CONFIG_FILE` environment variable
+2. `$XDG_CONFIG_HOME/gitgraph/config.toml`
+3. `~/.config/gitgraph/config.toml`
 
 Uses `umbra::optional` macro for partial TOML parsing with defaults. `garde` crate for validation.
 
@@ -815,8 +815,8 @@ diff_context = "white"
 
 **Acceptance Criteria**:
 - `cargo build` succeeds
-- `gpeek --help` shows usage
-- `gpeek --version` shows version
+- `gg --help` shows usage
+- `gg --version` shows version
 - Config file is loaded if present, defaults used otherwise
 - Terminal enters raw mode and exits cleanly
 
@@ -922,7 +922,7 @@ diff_context = "white"
 
 ## Appendix A: Comparison with Predecessors
 
-| Feature | serie | ftdv | gitpeek |
+| Feature | serie | ftdv | gitgraph |
 |---------|-------|------|---------|
 | Commit log with graph | Yes (image-based) | No | Yes |
 | File tree diff view | No | Yes | Yes (in detail view) |

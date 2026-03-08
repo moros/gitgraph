@@ -1,9 +1,9 @@
-//! Configuration loading for gitpeek.
+//! Configuration loading for gitgraph.
 //!
 //! Config file is searched in order:
-//! 1. `$GITPEEK_CONFIG_FILE` env var
-//! 2. `$XDG_CONFIG_HOME/gitpeek/config.toml`  (dirs::config_dir)
-//! 3. `~/.config/gitpeek/config.toml`
+//! 1. `$GITGRAPH_CONFIG_FILE` env var
+//! 2. `$XDG_CONFIG_HOME/gitgraph/config.toml`  (dirs::config_dir)
+//! 3. `~/.config/gitgraph/config.toml`
 //!
 //! All fields use `#[serde(default)]` so any or all sections may be omitted.
 //! Missing file → use defaults.
@@ -18,7 +18,7 @@ use std::path::PathBuf;
 // Top-level config
 // ---------------------------------------------------------------------------
 
-/// Fully-resolved gitpeek configuration (after merging file + defaults).
+/// Fully-resolved gitgraph configuration (after merging file + defaults).
 #[derive(Debug, Clone)]
 pub struct Config {
     pub core: CoreConfig,
@@ -81,16 +81,16 @@ impl Config {
     /// Resolve the config file path using the documented lookup order.
     pub fn config_path() -> Option<PathBuf> {
         // 1. Explicit env var
-        if let Ok(p) = std::env::var("GITPEEK_CONFIG_FILE") {
+        if let Ok(p) = std::env::var("GITGRAPH_CONFIG_FILE") {
             return Some(PathBuf::from(p));
         }
         // 2. XDG config dir (covers both $XDG_CONFIG_HOME and the OS default)
         if let Some(dir) = dirs::config_dir() {
-            return Some(dir.join("gitpeek").join("config.toml"));
+            return Some(dir.join("gitgraph").join("config.toml"));
         }
         // 3. Explicit ~/.config fallback (in case dirs returns None)
         if let Some(home) = dirs::home_dir() {
-            return Some(home.join(".config").join("gitpeek").join("config.toml"));
+            return Some(home.join(".config").join("gitgraph").join("config.toml"));
         }
         None
     }
@@ -487,10 +487,10 @@ mod tests {
 
     #[test]
     fn config_path_respects_env_var() {
-        std::env::set_var("GITPEEK_CONFIG_FILE", "/tmp/test-gitpeek.toml");
+        std::env::set_var("GITGRAPH_CONFIG_FILE", "/tmp/test-gitgraph.toml");
         let path = Config::config_path();
-        std::env::remove_var("GITPEEK_CONFIG_FILE");
-        assert_eq!(path, Some(PathBuf::from("/tmp/test-gitpeek.toml")));
+        std::env::remove_var("GITGRAPH_CONFIG_FILE");
+        assert_eq!(path, Some(PathBuf::from("/tmp/test-gitgraph.toml")));
     }
 
     #[test]

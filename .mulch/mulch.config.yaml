@@ -3,6 +3,7 @@ domains:
   - spec
   - gitpeek
   - architecture
+  - agents
 governance:
   max_entries: 100
   warn_entries: 150

@@ -5,7 +5,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use gitpeek::git::LogOrder;
+use gitgraph::git::LogOrder;
 use std::io;
 use std::panic;
 
@@ -37,7 +37,7 @@ enum Protocol {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "gpeek",
+    name = "gg",
     version = "0.1.0",
     about = "A TUI git commit explorer combining git log graph with file tree diff viewing"
 )]
@@ -98,7 +98,7 @@ fn main() -> Result<()> {
     }));
 
     let mut terminal = setup_terminal()?;
-    let result = gitpeek::run(&mut terminal, order);
+    let result = gitgraph::run(&mut terminal, order);
     restore_terminal(&mut terminal)?;
     result
 }

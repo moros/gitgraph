@@ -1,8 +1,8 @@
-# gitpeek
+# gitgraph
 
 > A terminal-based git commit explorer that combines image-based commit graphs with an interactive file tree diff viewer.
 
-`gpeek` merges the best of two tools into one: browse a visual git log graph (like [serie](https://github.com/lusingander/serie)), select a commit, and explore its changes through a collapsible file tree with inline diffs (like [ftdv](https://github.com/dmacvicar/ftdv)) — without leaving the terminal.
+`gg` merges the best of two tools into one: browse a visual git log graph (like [serie](https://github.com/lusingander/serie)), select a commit, and explore its changes through a collapsible file tree with inline diffs (like [ftdv](https://github.com/dmacvicar/ftdv)) — without leaving the terminal.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -55,28 +55,28 @@
 
 ```bash
 # Clone or download the source
-cd gitpeek
+cd gitgraph
 cargo install --path .
 ```
 
-The binary is named `gpeek`.
+The binary is named `gg`.
 
 ## Usage
 
 ```bash
 # Run in the current directory (must be a git repo)
-gpeek
+gg
 
 # Show all options
-gpeek --help
+gg --help
 ```
 
-`gpeek` always operates on the current working directory. `cd` into your repository before running.
+`gg` always operates on the current working directory. `cd` into your repository before running.
 
 ### CLI Options
 
 ```
-Usage: gpeek [OPTIONS]
+Usage: gg [OPTIONS]
 
 Options:
       --order <ORDER>              Git log ordering [default: chrono] [possible values: chrono, topo]
@@ -195,9 +195,9 @@ prev_commit           = ["K"]
 ## Configuration
 
 The config file is loaded from (in order):
-1. `$GITPEEK_CONFIG_FILE` environment variable
-2. `$XDG_CONFIG_HOME/gitpeek/config.toml`
-3. `~/.config/gitpeek/config.toml`
+1. `$GITGRAPH_CONFIG_FILE` environment variable
+2. `$XDG_CONFIG_HOME/gitgraph/config.toml`
+3. `~/.config/gitgraph/config.toml`
 
 All fields are optional — missing sections use defaults. A minimal config might look like:
 
@@ -345,7 +345,7 @@ Standalone marker variables (`{{refs}}`, `{{branches}}`, `{{remote_branches}}`, 
 
 ### External Diff Tools
 
-gitpeek supports two integration modes for external diff tools:
+gitgraph supports two integration modes for external diff tools:
 
 **Pager mode** — diff content is piped to the tool's stdin:
 ```toml
@@ -363,14 +363,14 @@ When both are set, `external_command` takes precedence. Template variables `{{wi
 
 ### Protocol Detection
 
-gitpeek auto-detects whether your terminal supports iTerm2 or Kitty image protocols. To force a specific protocol:
+gitgraph auto-detects whether your terminal supports iTerm2 or Kitty image protocols. To force a specific protocol:
 
 ```toml
 [core]
 protocol = "iterm"   # "auto" | "iterm" | "kitty"
 ```
 
-If neither protocol is detected, gitpeek renders the graph using Unicode box-drawing characters.
+If neither protocol is detected, gitgraph renders the graph using Unicode box-drawing characters.
 
 ### Graph Style
 
@@ -382,7 +382,7 @@ graph_style = "rounded"   # Bezier arcs for branch curves
 
 ## Architecture
 
-gitpeek is written in Rust and uses [ratatui](https://ratatui.rs/) for the TUI. All git interaction shells out to the system `git` binary — no libgit2. This keeps the binary small and leverages the user's existing git configuration (aliases, signing, etc.).
+gitgraph is written in Rust and uses [ratatui](https://ratatui.rs/) for the TUI. All git interaction shells out to the system `git` binary — no libgit2. This keeps the binary small and leverages the user's existing git configuration (aliases, signing, etc.).
 
 ### Key modules
 
@@ -400,7 +400,7 @@ gitpeek is written in Rust and uses [ratatui](https://ratatui.rs/) for the TUI. 
 
 ## Comparison
 
-| Feature | serie | ftdv | gitpeek |
+| Feature | serie | ftdv | gitgraph |
 |---------|-------|------|---------|
 | Commit graph (image-based) | ✓ | — | ✓ |
 | File tree diff view | — | ✓ | ✓ |

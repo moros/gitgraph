@@ -1,6 +1,6 @@
-//! Color theme for all gitpeek UI elements.
+//! Color theme for all gitgraph UI elements.
 //!
-//! [`ColorTheme`] holds a `ThemeColor` field for every UI element in gitpeek.
+//! [`ColorTheme`] holds a `ThemeColor` field for every UI element in gitgraph.
 //! All fields carry `#[serde(default)]` so a partial TOML `[color]` section
 //! only overrides the values the user specifies; everything else falls back to
 //! the built-in dark theme.
@@ -47,9 +47,9 @@ impl Default for GraphColorSet {
 
 // ─── ColorTheme ──────────────────────────────────────────────────────────────
 
-/// Complete color theme for all gitpeek UI elements.
+/// Complete color theme for all gitgraph UI elements.
 ///
-/// Deserialized from the `[color]` section of the gitpeek config file.
+/// Deserialized from the `[color]` section of the gitgraph config file.
 /// Every field has a default so a partial config merges cleanly with the
 /// built-in dark theme.
 #[derive(Debug, Clone, Deserialize, Serialize)]

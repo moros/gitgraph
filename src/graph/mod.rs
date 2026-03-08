@@ -1,4 +1,4 @@
-// Lane-based graph layout algorithm and 2D geometry for the gitpeek commit graph.
+// Lane-based graph layout algorithm and 2D geometry for the gitgraph commit graph.
 pub mod calc;
 pub mod geometry;
 pub mod image;

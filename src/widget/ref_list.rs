@@ -1,6 +1,6 @@
 //! RefList widget — tree-view of git refs (branches, remotes, tags, stashes).
 //!
-//! Ported from serie's widget/ref_list.rs with adaptations for gitpeek:
+//! Ported from serie's widget/ref_list.rs with adaptations for gitgraph:
 //! - Uses `Rc<Config>` instead of `Rc<AppContext>`
 //! - Semver comparison uses a simple inline parser (no `semver` crate dependency)
 

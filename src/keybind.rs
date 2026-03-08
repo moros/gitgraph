@@ -1,4 +1,4 @@
-//! Keybinding system for gitpeek.
+//! Keybinding system for gitgraph.
 //!
 //! Loads default bindings from `assets/default-keybind.toml` (embedded at
 //! compile time) and merges any user overrides from the config file.
@@ -18,7 +18,7 @@ use std::str::FromStr;
 // UserEvent
 // ---------------------------------------------------------------------------
 
-/// All possible user-triggered actions in gitpeek.
+/// All possible user-triggered actions in gitgraph.
 ///
 /// Global and list-view actions are mapped via [`KeyBind`].
 /// Detail-view and refs-view specific actions are handled by those views
@@ -363,7 +363,7 @@ impl KeyBind {
                         map.insert(key_event, event);
                     }
                     Err(e) => {
-                        eprintln!("gitpeek: keybind warning — {e}");
+                        eprintln!("gitgraph: keybind warning — {e}");
                     }
                 }
             }

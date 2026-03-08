@@ -1,4 +1,4 @@
-//! External diff tool integration for gitpeek.
+//! External diff tool integration for gitgraph.
 //!
 //! Supports two modes:
 //! - **Pager**: pipe `git diff` output through a pager (e.g. `delta`, `diff-so-fancy`)
