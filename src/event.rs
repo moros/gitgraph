@@ -8,34 +8,62 @@ pub enum AppEvent {
     Key(KeyEvent),
     Resize(u16, u16),
     Tick,
+    Quit,
+    OpenDetail,
+    OpenRefs,
+    OpenHelp,
+    CopyToClipboard { name: String, value: String },
+    ClearStatusLine,
+    UpdateStatusInput(String, Option<u16>, Option<String>),
+    NotifyInfo(String),
+    NotifyWarn(String),
+    NotifyError(String),
+    NotifySuccess(String),
+}
+
+#[derive(Clone)]
+pub struct Sender {
+    tx: mpsc::Sender<AppEvent>,
+}
+
+impl Sender {
+    pub fn send(&self, event: AppEvent) {
+        let _ = self.tx.send(event);
+    }
 }
 
 pub struct EventHandler {
     receiver: mpsc::Receiver<AppEvent>,
+    sender: Sender,
 }
 
 impl EventHandler {
     pub fn new() -> Self {
-        let (sender, receiver) = mpsc::channel();
+        let (tx, receiver) = mpsc::channel();
+        let sender = Sender { tx: tx.clone() };
         let tick_rate = Duration::from_millis(250);
 
         thread::spawn(move || loop {
             if event::poll(tick_rate).expect("failed to poll events") {
                 match event::read().expect("failed to read event") {
                     Event::Key(key) => {
-                        let _ = sender.send(AppEvent::Key(key));
+                        let _ = tx.send(AppEvent::Key(key));
                     }
                     Event::Resize(w, h) => {
-                        let _ = sender.send(AppEvent::Resize(w, h));
+                        let _ = tx.send(AppEvent::Resize(w, h));
                     }
                     _ => {}
                 }
             } else {
-                let _ = sender.send(AppEvent::Tick);
+                let _ = tx.send(AppEvent::Tick);
             }
         });
 
-        Self { receiver }
+        Self { receiver, sender }
+    }
+
+    pub fn sender(&self) -> Sender {
+        self.sender.clone()
     }
 
     pub fn next(&self) -> Result<AppEvent> {

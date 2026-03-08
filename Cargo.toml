@@ -28,6 +28,9 @@ arboard = "3.6"
 umbra = "0.4"
 garde = { version = "0.22", features = ["derive"] }
 dirs = "6.0"
+rustc-hash = "2"
+once_cell = "1"
+console = "0.15"
 
 [dev-dependencies]
 dircpy = "0.3"
