@@ -33,10 +33,26 @@ pub struct Repository {
     refs: RefMap,
     pub commit_hashes: Vec<CommitHash>,
     pub head: Head,
+    /// Log ordering used at load time; reused for incremental batches.
+    order: LogOrder,
+    /// Stash commits stored for ref consistency across batches.
+    stashes: Vec<Commit>,
+    /// Count of regular (non-stash) commits loaded so far; drives --skip on extend.
+    regular_commits_loaded: usize,
+    /// True once all commits have been fetched from git log.
+    all_commits_loaded: bool,
 }
 
 impl Repository {
+    /// Load all commits from the repository (no batch limit).
     pub fn load(order: LogOrder) -> Result<Self> {
+        Self::load_partial(order, 0)
+    }
+
+    /// Load commits from the repository, fetching at most `batch_size` commits.
+    ///
+    /// `batch_size = 0` loads all commits at once (no limit).
+    pub fn load_partial(order: LogOrder, batch_size: usize) -> Result<Self> {
         let path = PathBuf::from(".");
 
         check_git_repository()?;
@@ -44,13 +60,17 @@ impl Repository {
         let (mut ref_map, head) = load_refs(&path);
 
         let stashes = load_stashes(&path);
-        let commits = load_commits(&path, order, &head, &stashes);
+        let max_count = if batch_size == 0 { None } else { Some(batch_size) };
+        let regular_commits = load_commits(&path, order, &head, &stashes, max_count, 0);
 
-        if commits.is_empty() {
+        if regular_commits.is_empty() && stashes.is_empty() {
             anyhow::bail!("no commits in the repository");
         }
 
-        let commits = merge_stashes_to_commits(commits, stashes);
+        let regular_count = regular_commits.len();
+        let all_commits_loaded = batch_size == 0 || regular_commits.len() < batch_size;
+
+        let commits = merge_stashes_to_commits(regular_commits, stashes.clone());
         let commit_hashes: Vec<CommitHash> = commits.iter().map(|c| c.hash.clone()).collect();
 
         let (parents_map, children_map) = build_commits_maps(&commits);
@@ -68,7 +88,57 @@ impl Repository {
             refs: ref_map,
             commit_hashes,
             head,
+            order,
+            stashes,
+            regular_commits_loaded: regular_count,
+            all_commits_loaded,
         })
+    }
+
+    /// Append the next batch of commits.
+    ///
+    /// Returns `true` if new commits were added, `false` if already fully loaded.
+    /// `batch_size = 0` loads all remaining commits at once.
+    pub fn load_more(&mut self, batch_size: usize) -> Result<bool> {
+        if self.all_commits_loaded {
+            return Ok(false);
+        }
+
+        let skip = self.regular_commits_loaded;
+        let max_count = if batch_size == 0 { None } else { Some(batch_size) };
+        let new_commits =
+            load_commits(&self.path, self.order, &self.head, &self.stashes, max_count, skip);
+
+        let loaded = new_commits.len();
+        if loaded == 0 {
+            self.all_commits_loaded = true;
+            return Ok(false);
+        }
+
+        self.all_commits_loaded = batch_size == 0 || loaded < batch_size;
+        self.regular_commits_loaded += loaded;
+
+        for commit in new_commits {
+            for parent_hash in &commit.parent_hashes {
+                self.parents_map
+                    .entry(commit.hash.clone())
+                    .or_default()
+                    .push(parent_hash.clone());
+                self.children_map
+                    .entry(parent_hash.clone())
+                    .or_default()
+                    .push(commit.hash.clone());
+            }
+            self.commit_hashes.push(commit.hash.clone());
+            self.commits.insert(commit.hash.clone(), commit);
+        }
+
+        Ok(true)
+    }
+
+    /// Returns `true` when all commits have been loaded from git log.
+    pub fn all_loaded(&self) -> bool {
+        self.all_commits_loaded
     }
 
     #[cfg(test)]
@@ -86,6 +156,7 @@ impl Repository {
                     .push(parent_hash.clone());
             }
         }
+        let regular_commits_loaded = commit_hashes.len();
         Self {
             path: PathBuf::from("."),
             commits,
@@ -94,6 +165,10 @@ impl Repository {
             refs: RefMap::default(),
             commit_hashes,
             head: Head::None,
+            order: LogOrder::Chronological,
+            stashes: Vec::new(),
+            regular_commits_loaded,
+            all_commits_loaded: true,
         }
     }
 
@@ -155,7 +230,14 @@ fn load_commits_format() -> String {
     .join("\x1f")
 }
 
-fn load_commits(path: &Path, order: LogOrder, head: &Head, stashes: &[Commit]) -> Vec<Commit> {
+fn load_commits(
+    path: &Path,
+    order: LogOrder,
+    head: &Head,
+    stashes: &[Commit],
+    max_count: Option<usize>,
+    skip: usize,
+) -> Vec<Commit> {
     let mut cmd = Command::new("git");
     cmd.arg("log");
 
@@ -163,6 +245,14 @@ fn load_commits(path: &Path, order: LogOrder, head: &Head, stashes: &[Commit]) -
         LogOrder::Chronological => "--date-order",
         LogOrder::Topological => "--topo-order",
     });
+
+    if let Some(n) = max_count {
+        cmd.arg(format!("--max-count={n}"));
+    }
+
+    if skip > 0 {
+        cmd.arg(format!("--skip={skip}"));
+    }
 
     cmd.arg(format!("--pretty={}", load_commits_format()))
         .arg("--date=iso-strict")

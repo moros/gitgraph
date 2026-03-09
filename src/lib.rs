@@ -27,31 +27,40 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
 
     loop {
         let config = Rc::new(Config::load()?);
-        let repo = Repository::load(order)?;
-        let graph = calc_graph(&repo);
+        let batch_size = config.core.batch_size;
+        let mut repo = Repository::load_partial(order, batch_size)?;
+        let mut graph = calc_graph(&repo);
 
-        let events = event::EventHandler::new();
-        let tx = events.sender();
+        loop {
+            let events = event::EventHandler::new();
+            let tx = events.sender();
 
-        let mut app = app::App::new(
-            &repo,
-            &graph,
-            config,
-            tx,
-            restore_hash.as_ref(),
-            use_text_graph,
-        );
+            let mut app = app::App::new(
+                &repo,
+                &graph,
+                config.clone(),
+                tx,
+                restore_hash.as_ref(),
+                use_text_graph,
+            );
 
-        match app.run(terminal, &events)? {
-            RunResult::Quit => break,
-            RunResult::Refresh(hash) => {
-                restore_hash = hash;
-                continue;
+            match app.run(terminal, &events)? {
+                RunResult::Quit => return Ok(()),
+                RunResult::Refresh(hash) => {
+                    restore_hash = hash;
+                    break; // break inner loop → outer loop does full reload
+                }
+                RunResult::LoadMore(hash) => {
+                    restore_hash = hash;
+                    if batch_size > 0 && !repo.all_loaded() {
+                        repo.load_more(batch_size)?;
+                        graph = calc_graph(&repo);
+                    }
+                    // continue inner loop with expanded repo (or no-op if fully loaded)
+                }
             }
         }
     }
-
-    Ok(())
 }
 
 /// Returns `true` when the terminal is known to support inline image protocols
