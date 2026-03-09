@@ -35,12 +35,12 @@ pub struct Repository {
     pub head: Head,
     /// Log ordering used at load time; reused for incremental batches.
     order: LogOrder,
-    /// Stash commits stored for ref consistency across batches.
+    /// Stash commits stored for rev-ref consistency across batches.
     stashes: Vec<Commit>,
     /// Count of regular (non-stash) commits loaded so far; drives --skip on extend.
     regular_commits_loaded: usize,
     /// True once all commits have been fetched from git log.
-    all_commits_loaded: bool,
+    pub all_commits_loaded: bool,
 }
 
 impl Repository {
@@ -134,11 +134,6 @@ impl Repository {
         }
 
         Ok(true)
-    }
-
-    /// Returns `true` when all commits have been loaded from git log.
-    pub fn all_loaded(&self) -> bool {
-        self.all_commits_loaded
     }
 
     #[cfg(test)]
