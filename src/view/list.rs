@@ -193,6 +193,8 @@ impl ListView {
                 _ => {}
             }
         }
+
+        self.check_load_more();
     }
 
     /// Forward raw key input when in search mode (called from App for unmapped keys).
@@ -227,6 +229,13 @@ impl ListView {
                 Some(cursor_pos),
                 transient,
             ));
+        }
+    }
+
+    /// If the cursor is within 50 commits of the bottom, request more data.
+    fn check_load_more(&self) {
+        if self.list_state().near_bottom(50) {
+            self.tx.send(AppEvent::LoadMore);
         }
     }
 
