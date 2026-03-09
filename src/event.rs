@@ -36,6 +36,8 @@ pub enum AppEvent {
     NotifySuccess(String),
     /// Reload repository data while preserving user context.
     Refresh,
+    /// Scroll reached near the bottom; request loading more commits.
+    LoadMore,
     /// Terminal focus lost/gained events
     FocusLost,
     FocusGained,
