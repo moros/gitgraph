@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::event::{AppEvent, Sender};
-use crate::git::FileChange;
+use crate::git::diff::{uncommitted_file_diff, FileChange};
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::widget::commit_list::{CommitList, CommitListState, SearchState};
 use crossterm::event::KeyEvent;
@@ -10,9 +10,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
 };
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct ListView {
@@ -21,6 +22,14 @@ pub struct ListView {
     tx: Sender,
     /// Whether the inline split detail for the uncommitted row is currently visible.
     pub show_inline_detail: bool,
+    /// Index of the currently selected file in the uncommitted detail pane.
+    selected_file: usize,
+    /// Vertical scroll offset for the diff pane.
+    diff_scroll_y: u16,
+    /// Horizontal scroll offset for the diff pane.
+    diff_scroll_x: u16,
+    /// Cached diff: (filepath, content) for the currently selected file.
+    diff_cache: Option<(String, String)>,
 }
 
 impl ListView {
@@ -36,6 +45,10 @@ impl ListView {
             config,
             tx,
             show_inline_detail,
+            selected_file: 0,
+            diff_scroll_y: 0,
+            diff_scroll_x: 0,
+            diff_cache: None,
         }
     }
 
@@ -52,6 +65,11 @@ impl ListView {
             self.list_state().search_state(),
             SearchState::Searching { .. }
         )
+    }
+
+    /// Force-dismiss the inline uncommitted detail pane.
+    pub fn dismiss_inline_detail(&mut self) {
+        self.show_inline_detail = false;
     }
 
     pub fn handle_event(&mut self, ewc: UserEventWithCount, key: KeyEvent) {
@@ -86,21 +104,57 @@ impl ListView {
             return;
         }
 
-        // Dismiss inline uncommitted detail with q
-        if self.show_inline_detail && matches!(event, UserEvent::Quit | UserEvent::Cancel) {
-            self.show_inline_detail = false;
-            self.tx.send(AppEvent::CloseUncommittedDetail);
+        // When inline uncommitted detail is showing, intercept all navigation.
+        // BUG 2 fix: j/k and scroll events navigate the detail pane, not the commit list.
+        if self.show_inline_detail {
+            match event {
+                UserEvent::Quit | UserEvent::Cancel => {
+                    self.show_inline_detail = false;
+                    self.tx.send(AppEvent::CloseUncommittedDetail);
+                }
+                UserEvent::NavigateDown | UserEvent::SelectDown => {
+                    self.select_detail_file_next(count);
+                }
+                UserEvent::NavigateUp | UserEvent::SelectUp => {
+                    self.select_detail_file_prev(count);
+                }
+                UserEvent::GoToTop => {
+                    self.selected_file = 0;
+                    self.invalidate_diff();
+                }
+                UserEvent::GoToBottom => {
+                    let file_count = self.uncommitted_files().len();
+                    if file_count > 0 {
+                        self.selected_file = file_count - 1;
+                        self.invalidate_diff();
+                    }
+                }
+                UserEvent::ScrollDown => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_add(count as u16);
+                }
+                UserEvent::ScrollUp => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count as u16);
+                }
+                UserEvent::HalfPageDown => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_add(count as u16 * 10);
+                }
+                UserEvent::HalfPageUp => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count as u16 * 10);
+                }
+                UserEvent::PageDown => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_add(count as u16 * 20);
+                }
+                UserEvent::PageUp => {
+                    self.diff_scroll_y = self.diff_scroll_y.saturating_sub(count as u16 * 20);
+                }
+                _ => {}
+            }
             return;
         }
 
         match event {
             UserEvent::Quit => {
-                if self.show_inline_detail {
-                    // q collapses the inline split detail rather than quitting.
-                    self.show_inline_detail = false;
-                } else {
-                    self.tx.send(AppEvent::Quit);
-                }
+                self.tx.send(AppEvent::Quit);
             }
             UserEvent::ForceQuit => {
                 self.tx.send(AppEvent::Quit);
@@ -200,6 +254,10 @@ impl ListView {
                     .unwrap_or(false);
                 if is_uncommitted {
                     self.show_inline_detail = true;
+                    self.selected_file = 0;
+                    self.diff_scroll_y = 0;
+                    self.diff_scroll_x = 0;
+                    self.diff_cache = None;
                     self.tx.send(AppEvent::OpenUncommittedDetail);
                 } else {
                     self.tx.send(AppEvent::OpenDetail);
@@ -250,24 +308,15 @@ impl ListView {
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
         if self.show_inline_detail {
             let [list_area, detail_area] = Layout::vertical([
-                Constraint::Percentage(25),
-                Constraint::Percentage(75),
+                Constraint::Percentage(35),
+                Constraint::Percentage(65),
             ])
             .areas(area);
 
             let widget = CommitList::new(self.config.clone());
             f.render_stateful_widget(widget, list_area, self.list_state_mut());
 
-            // Collect files after the stateful render (borrow ends).
-            let files: Vec<FileChange> = self
-                .commit_list_state
-                .as_ref()
-                .and_then(|s| s.commits.first())
-                .filter(|c| c.is_uncommitted)
-                .map(|c| c.uncommitted_files.clone())
-                .unwrap_or_default();
-
-            render_inline_detail_pane(f, detail_area, &files);
+            self.render_uncommitted_detail_pane(f, detail_area);
         } else {
             let widget = CommitList::new(self.config.clone());
             f.render_stateful_widget(widget, area, self.list_state_mut());
@@ -314,57 +363,184 @@ impl ListView {
             self.tx.send(AppEvent::ClearStatusLine);
         }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Inline detail pane renderer
-// ---------------------------------------------------------------------------
-
-/// Render the bottom split pane showing staged/unstaged file changes.
-fn render_inline_detail_pane(f: &mut Frame, area: Rect, files: &[FileChange]) {
-    let block = Block::default()
-        .title(" Uncommitted Changes (q to close) ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::LightRed));
-
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-
-    if files.is_empty() {
-        let msg = Line::from(
-            Span::styled(
-                "  No staged or unstaged changes detected.",
-                Style::default().fg(Color::DarkGray),
-            )
-        );
-        f.render_widget(
-            ratatui::widgets::Paragraph::new(msg),
-            inner,
-        );
-        return;
+    /// Returns a clone of the uncommitted files list (empty if none).
+    fn uncommitted_files(&self) -> Vec<FileChange> {
+        self.commit_list_state
+            .as_ref()
+            .and_then(|s| s.commits.first())
+            .filter(|c| c.is_uncommitted)
+            .map(|c| c.uncommitted_files.clone())
+            .unwrap_or_default()
     }
 
-    let items: Vec<ListItem> = files
-        .iter()
-        .map(|change| match change {
-            FileChange::Add(path) => ListItem::new(Line::from(vec![
-                Span::styled("A  ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
-                Span::raw(path.clone()),
-            ])),
-            FileChange::Modify(path) => ListItem::new(Line::from(vec![
-                Span::styled("M  ", Style::default().fg(Color::LightYellow).add_modifier(Modifier::BOLD)),
-                Span::raw(path.clone()),
-            ])),
-            FileChange::Delete(path) => ListItem::new(Line::from(vec![
-                Span::styled("D  ", Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD)),
-                Span::raw(path.clone()),
-            ])),
-            FileChange::Move(from, to) => ListItem::new(Line::from(vec![
-                Span::styled("R  ", Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
-                Span::raw(format!("{from} → {to}")),
-            ])),
-        })
-        .collect();
+    fn select_detail_file_next(&mut self, count: usize) {
+        let file_count = self.uncommitted_files().len();
+        if file_count == 0 {
+            return;
+        }
+        let new_idx = (self.selected_file + count).min(file_count - 1);
+        if new_idx != self.selected_file {
+            self.selected_file = new_idx;
+            self.invalidate_diff();
+        }
+    }
 
-    f.render_widget(List::new(items), inner);
+    fn select_detail_file_prev(&mut self, count: usize) {
+        let new_idx = self.selected_file.saturating_sub(count);
+        if new_idx != self.selected_file {
+            self.selected_file = new_idx;
+            self.invalidate_diff();
+        }
+    }
+
+    fn invalidate_diff(&mut self) {
+        self.diff_cache = None;
+        self.diff_scroll_y = 0;
+        self.diff_scroll_x = 0;
+    }
+
+    /// BUG 1 fix: Render a proper split detail pane with file tree (left) and diff (right).
+    fn render_uncommitted_detail_pane(&mut self, f: &mut Frame, area: Rect) {
+        // Collect files before any mutable borrows
+        let files = self.uncommitted_files();
+
+        if files.is_empty() {
+            let block = Block::default()
+                .title(" Uncommitted Changes (q to close) ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::LightRed));
+            let inner = block.inner(area);
+            f.render_widget(block, area);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "  No staged or unstaged changes detected.",
+                    Style::default().fg(Color::DarkGray),
+                ))),
+                inner,
+            );
+            return;
+        }
+
+        let border_color = self.config.color.border.0;
+        let tree_width = ((area.width as u32 * 30 / 100) as u16).clamp(20, 50);
+        let [tree_area, diff_area] =
+            Layout::horizontal([Constraint::Length(tree_width), Constraint::Min(0)]).areas(area);
+
+        // ── File tree (left) ──────────────────────────────────────────────
+        let selected_file = self.selected_file;
+        let items: Vec<ListItem> = files
+            .iter()
+            .enumerate()
+            .map(|(i, change)| {
+                let (prefix, path) = match change {
+                    FileChange::Add(p) => ("+ ", p.as_str()),
+                    FileChange::Modify(p) => ("M ", p.as_str()),
+                    FileChange::Delete(p) => ("- ", p.as_str()),
+                    FileChange::Move(_from, to) => ("R ", to.as_str()),
+                };
+                let (prefix_color, path_style) = if i == selected_file {
+                    (
+                        Color::Green,
+                        Style::default().add_modifier(Modifier::REVERSED),
+                    )
+                } else {
+                    let c = match change {
+                        FileChange::Add(_) => Color::Green,
+                        FileChange::Modify(_) => Color::Yellow,
+                        FileChange::Delete(_) => Color::Red,
+                        FileChange::Move(_, _) => Color::Cyan,
+                    };
+                    (c, Style::default())
+                };
+                let line = Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(prefix_color)),
+                    Span::styled(path, path_style),
+                ]);
+                ListItem::new(line)
+            })
+            .collect();
+
+        let file_count = files.len();
+        let tree_title = format!(
+            " {} file{} (j/k) ",
+            file_count,
+            if file_count == 1 { "" } else { "s" }
+        );
+        let list = List::new(items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title(tree_title),
+        );
+        f.render_widget(list, tree_area);
+
+        // ── Diff pane (right) ─────────────────────────────────────────────
+        let content = self.ensure_uncommitted_diff(&files);
+        let scroll_y = self.diff_scroll_y;
+        let scroll_x = self.diff_scroll_x;
+
+        let lines: Vec<Line> = content
+            .lines()
+            .skip(scroll_y as usize)
+            .map(|line| {
+                let line = if scroll_x > 0 {
+                    line.chars()
+                        .skip(scroll_x as usize)
+                        .collect::<String>()
+                } else {
+                    line.to_string()
+                };
+                if line.starts_with('+') && !line.starts_with("+++") {
+                    Line::styled(line, Style::default().fg(Color::Green))
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    Line::styled(line, Style::default().fg(Color::Red))
+                } else if line.starts_with("@@") {
+                    Line::styled(line, Style::default().fg(Color::Cyan))
+                } else {
+                    Line::raw(line)
+                }
+            })
+            .collect();
+
+        let diff_title = match files.get(self.selected_file) {
+            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => {
+                format!(" {} ", p)
+            }
+            Some(FileChange::Move(_, to)) => format!(" {} ", to),
+            None => " Diff ".to_string(),
+        };
+
+        let paragraph = Paragraph::new(lines).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color))
+                .title(diff_title),
+        );
+        f.render_widget(paragraph, diff_area);
+    }
+
+    /// Returns the diff content for the selected uncommitted file, loading and caching it.
+    fn ensure_uncommitted_diff(&mut self, files: &[FileChange]) -> String {
+        let filepath = match files.get(self.selected_file) {
+            Some(FileChange::Add(p) | FileChange::Modify(p) | FileChange::Delete(p)) => {
+                p.clone()
+            }
+            Some(FileChange::Move(_, to)) => to.clone(),
+            None => return String::new(),
+        };
+
+        // Check simple single-entry cache
+        if let Some((cached_path, cached_content)) = &self.diff_cache {
+            if cached_path == &filepath {
+                return cached_content.clone();
+            }
+        }
+
+        // Cache miss — load from git
+        let diff = uncommitted_file_diff(Path::new("."), &filepath);
+        let content = diff.content;
+        self.diff_cache = Some((filepath, content.clone()));
+        content
+    }
 }

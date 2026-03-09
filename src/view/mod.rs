@@ -136,6 +136,15 @@ impl View {
         }
     }
 
+    /// Dismiss the inline uncommitted detail pane if it is currently shown.
+    /// Called when returning from a regular commit detail to ensure the pane
+    /// is not re-shown even if the config flag is enabled (BUG 3 fix).
+    pub fn dismiss_inline_detail(&mut self) {
+        if let View::List(view) = self {
+            view.dismiss_inline_detail();
+        }
+    }
+
     /// Returns true if the status line is currently showing search input.
     pub fn is_in_input_mode(&self) -> bool {
         match self {

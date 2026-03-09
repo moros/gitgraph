@@ -385,6 +385,9 @@ impl App {
                     if let Some(list_state) = self.saved_list_state.take() {
                         self.transition();
                         self.view = View::of_list(list_state, self.config.clone(), self.tx.clone());
+                        // BUG 3 fix: user navigated away from the uncommitted row to a regular
+                        // commit and is now returning — do not re-show the inline detail.
+                        self.view.dismiss_inline_detail();
                     }
                 }
                 AppEvent::DetailNextCommit => {
@@ -465,7 +468,12 @@ impl App {
                     self.app_status.status_line = StatusLine::NotificationSuccess(msg);
                 }
 
-                AppEvent::OpenUncommittedDetail | AppEvent::CloseUncommittedDetail => {}
+                AppEvent::OpenUncommittedDetail => {}
+                AppEvent::CloseUncommittedDetail => {
+                    // BUG 4 fix: trigger a full clear/transition so graph image cells
+                    // don't bleed through after the inline detail is dismissed.
+                    self.transition();
+                }
 
                 AppEvent::CopyToClipboard { name, value } => {
                     self.copy_to_clipboard(name, value);
