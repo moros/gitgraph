@@ -35,6 +35,9 @@ pub enum RunResult {
     /// The user requested a data refresh; the inner value is the currently
     /// selected commit hash (used to restore context after reload).
     Refresh(Option<CommitHash>),
+    /// The user scrolled near the bottom; load the next batch of commits.
+    /// The inner value is the currently selected commit hash.
+    LoadMore(Option<CommitHash>),
 }
 
 // ---------------------------------------------------------------------------
@@ -323,6 +326,17 @@ impl App {
                             .map(|ls| ls.selected_commit_hash().clone())
                     };
                     return Ok(RunResult::Refresh(hash));
+                }
+
+                AppEvent::LoadMore => {
+                    let hash = if let Some(ls) = self.view.take_list_state() {
+                        Some(ls.selected_commit_hash().clone())
+                    } else {
+                        self.saved_list_state
+                            .as_ref()
+                            .map(|ls| ls.selected_commit_hash().clone())
+                    };
+                    return Ok(RunResult::LoadMore(hash));
                 }
 
                 AppEvent::OpenDetail => {

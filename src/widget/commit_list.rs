@@ -511,6 +511,13 @@ impl CommitListState {
         &self.commits[self.current_selected_index()].commit.hash
     }
 
+    /// Returns `true` when the current position is within `threshold` commits
+    /// of the last loaded commit — used to trigger incremental loading.
+    pub fn near_bottom(&self, threshold: usize) -> bool {
+        let current_abs = self.offset + self.selected;
+        current_abs + threshold >= self.total
+    }
+
     fn current_selected_index(&self) -> usize {
         self.offset + self.selected
     }
