@@ -15,10 +15,11 @@ pub mod widget;
 use anyhow::Result;
 use app::RunResult;
 use config::Config;
-use git::{CommitHash, LogOrder, Repository};
+use git::{CommitHash, FileChange, LogOrder, Repository};
 use graph::calc_graph;
 use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io::Stdout;
+use std::process::{Command, Stdio};
 use std::rc::Rc;
 
 pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -> Result<()> {
@@ -34,6 +35,7 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
         loop {
             let events = event::EventHandler::new();
             let tx = events.sender();
+            let uncommitted_files = detect_uncommitted_changes();
 
             let mut app = app::App::new(
                 &repo,
@@ -42,6 +44,7 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
                 tx,
                 restore_hash.as_ref(),
                 use_text_graph,
+                uncommitted_files,
             );
 
             match app.run(terminal, &events)? {
@@ -61,6 +64,60 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
             }
         }
     }
+}
+
+/// Detect uncommitted working-tree changes (staged + unstaged + untracked).
+///
+/// Returns a list of [`FileChange`] entries for files that differ from HEAD.
+/// Returns an empty Vec when the working tree is clean or when git is
+/// unavailable.
+fn detect_uncommitted_changes() -> Vec<FileChange> {
+    // Use `git status --porcelain` to enumerate all changes.
+    let Ok(output) = Command::new("git")
+        .args(["status", "--porcelain"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return vec![];
+    };
+
+    if !output.status.success() {
+        return vec![];
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout);
+    let mut files: Vec<FileChange> = Vec::new();
+
+    for line in text.lines() {
+        // Porcelain v1: "XY PATH" (X = index status, Y = worktree status)
+        if line.len() < 3 {
+            continue;
+        }
+        let x = line.chars().next().unwrap_or(' ');
+        let y = line.chars().nth(1).unwrap_or(' ');
+        let path = line[3..].trim().to_string();
+
+        // Determine the primary status character (prefer index over worktree).
+        let status = if x != ' ' && x != '?' { x } else { y };
+
+        match status {
+            'A' | '?' => files.push(FileChange::Add(path)),
+            'M' | 'C' | 'U' => files.push(FileChange::Modify(path)),
+            'D' => files.push(FileChange::Delete(path)),
+            'R' => {
+                // Porcelain v1 shows renames as "R  new -> old" (space-arrow-space).
+                if let Some((new, old)) = path.split_once(" -> ") {
+                    files.push(FileChange::Move(old.to_string(), new.to_string()));
+                } else {
+                    files.push(FileChange::Modify(path));
+                }
+            }
+            _ => {}
+        }
+    }
+
+    files
 }
 
 /// Returns `true` when the terminal is known to support inline image protocols
