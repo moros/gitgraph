@@ -468,7 +468,11 @@ impl App {
                     self.app_status.status_line = StatusLine::NotificationSuccess(msg);
                 }
 
-                AppEvent::OpenUncommittedDetail => {}
+                AppEvent::OpenUncommittedDetail => {
+                    // Clear graph images so they don't bleed through the bottom
+                    // detail pane area when the split view activates.
+                    self.transition();
+                }
                 AppEvent::CloseUncommittedDetail => {
                     // BUG 4 fix: trigger a full clear/transition so graph image cells
                     // don't bleed through after the inline detail is dismissed.
