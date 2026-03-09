@@ -110,6 +110,9 @@ pub struct CoreConfig {
     /// Maximum graph column width in terminal cells (0 uses the default cap).
     #[serde(default = "default_graph_max_width")]
     pub graph_max_width: u16,
+    /// Number of commits to load per batch (0 = unlimited / load all at once).
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
     /// Graph line rendering style.
     pub graph_style: GraphStyle,
     /// Which commit to select on startup.
@@ -123,10 +126,16 @@ pub struct CoreConfig {
 }
 
 pub(crate) const DEFAULT_GRAPH_MAX_WIDTH: u16 = 22;
+pub(crate) const DEFAULT_BATCH_SIZE: usize = 500;
 
 // Default maximum graph column width (in terminal cells).
 fn default_graph_max_width() -> u16 {
     DEFAULT_GRAPH_MAX_WIDTH
+}
+
+// Default number of commits loaded per batch (0 = unlimited).
+fn default_batch_size() -> usize {
+    DEFAULT_BATCH_SIZE
 }
 
 impl Default for CoreConfig {
@@ -135,6 +144,7 @@ impl Default for CoreConfig {
             order: OrderType::default(),
             graph_width: GraphWidth::default(),
             graph_max_width: default_graph_max_width(),
+            batch_size: default_batch_size(),
             graph_style: GraphStyle::default(),
             initial_selection: InitialSelection::default(),
             protocol: Protocol::default(),
@@ -456,6 +466,7 @@ mod tests {
         assert_eq!(c.order, OrderType::Chrono);
         assert_eq!(c.graph_width, GraphWidth::Auto);
         assert_eq!(c.graph_max_width, DEFAULT_GRAPH_MAX_WIDTH);
+        assert_eq!(c.batch_size, DEFAULT_BATCH_SIZE);
         assert_eq!(c.graph_style, GraphStyle::Rounded);
         assert_eq!(c.initial_selection, InitialSelection::Latest);
         assert_eq!(c.protocol, Protocol::Auto);
@@ -529,8 +540,29 @@ order = "topo"
         assert_eq!(raw.core.order, OrderType::Topo);
         // Other fields should be defaults
         assert_eq!(raw.core.graph_width, GraphWidth::Auto);
+        assert_eq!(raw.core.batch_size, DEFAULT_BATCH_SIZE);
         assert_eq!(raw.ui.list.subject_min_width, 20);
         assert_eq!(raw.ui.detail.tree_width_percent, 20);
+    }
+
+    #[test]
+    fn batch_size_can_be_configured() {
+        let toml_str = r#"
+[core]
+batch_size = 1000
+"#;
+        let raw: RawConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(raw.core.batch_size, 1000);
+    }
+
+    #[test]
+    fn batch_size_zero_means_unlimited() {
+        let toml_str = r#"
+[core]
+batch_size = 0
+"#;
+        let raw: RawConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(raw.core.batch_size, 0);
     }
 
     #[test]
