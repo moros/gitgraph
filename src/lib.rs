@@ -22,12 +22,20 @@ use std::io::Stdout;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
-pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -> Result<()> {
+pub fn run(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    order: LogOrder,
+    uncommitted_detail_override: Option<bool>,
+) -> Result<()> {
     let use_text_graph = !terminal_supports_images();
     let mut restore_hash: Option<CommitHash> = None;
 
     loop {
-        let config = Rc::new(Config::load()?);
+        let mut config = Config::load()?;
+        if let Some(override_val) = uncommitted_detail_override {
+            config.core.show_uncommitted_detail = override_val;
+        }
+        let config = Rc::new(config);
         let batch_size = config.core.batch_size;
         let mut repo = Repository::load_partial(order, batch_size)?;
         let mut graph = calc_graph(&repo);

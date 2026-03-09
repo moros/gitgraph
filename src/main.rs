@@ -57,6 +57,14 @@ struct Cli {
     /// Terminal image protocol
     #[arg(long, value_enum, default_value_t = Protocol::Auto)]
     protocol: Protocol,
+
+    /// Force auto-open the inline split detail pane for uncommitted changes on startup
+    #[arg(long, overrides_with = "no_uncommitted_detail")]
+    uncommitted_detail: bool,
+
+    /// Suppress auto-open of the inline split detail pane for uncommitted changes on startup
+    #[arg(long, short = 'U', overrides_with = "uncommitted_detail")]
+    no_uncommitted_detail: bool,
 }
 
 fn setup_terminal() -> Result<ratatui::Terminal<ratatui::backend::CrosstermBackend<io::Stdout>>> {
@@ -97,8 +105,16 @@ fn main() -> Result<()> {
         original_hook(panic_info);
     }));
 
+    let uncommitted_detail_override = if args.uncommitted_detail {
+        Some(true)
+    } else if args.no_uncommitted_detail {
+        Some(false)
+    } else {
+        None
+    };
+
     let mut terminal = setup_terminal()?;
-    let result = gitgraph::run(&mut terminal, order);
+    let result = gitgraph::run(&mut terminal, order, uncommitted_detail_override);
     restore_terminal(&mut terminal)?;
     result
 }
