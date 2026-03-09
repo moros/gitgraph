@@ -28,7 +28,7 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
     loop {
         let config = Rc::new(Config::load()?);
         let batch_size = config.core.batch_size;
-        let mut repo = Repository::load(order, batch_size)?;
+        let mut repo = Repository::load_partial(order, batch_size)?;
         let mut graph = calc_graph(&repo);
 
         loop {
@@ -52,7 +52,7 @@ pub fn run(terminal: &mut Terminal<CrosstermBackend<Stdout>>, order: LogOrder) -
                 }
                 RunResult::LoadMore(hash) => {
                     restore_hash = hash;
-                    if batch_size > 0 && !repo.all_loaded() {
+                    if batch_size > 0 && !repo.all_commits_loaded {
                         repo.load_more(batch_size)?;
                         graph = calc_graph(&repo);
                     }
