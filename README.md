@@ -40,6 +40,7 @@
 - **Inline diff viewer** — syntax-colored diffs with vertical and horizontal scrolling; supports external tools like `delta` and `difftastic`
 - **Refs browser** — tree view of branches, remotes, tags, and stashes; select any ref to jump to its commit
 - **Vim-style navigation** — `j`/`k`, `g`/`G`, numeric prefixes (`5j`), half/full page jumps
+- **Uncommitted changes detail** — automatically opens an inline split view showing modified files and diffs for uncommitted changes when launching `gg`
 - **Fuzzy search** — `/` to search commits with exact or fuzzy matching, case-insensitive toggle
 - **User commands** — run configurable external commands with commit context (`{{target_hash}}`, `{{branches}}`, etc.)
 - **Clipboard support** — copy short (`c`) or full (`C`) commit hash
@@ -97,6 +98,9 @@ Options:
       --graph-width <GRAPH_WIDTH>  Graph column width [default: auto] [possible values: auto, double, single]
       --graph-style <GRAPH_STYLE>  Graph rendering style [default: rounded] [possible values: rounded, angular]
       --protocol <PROTOCOL>        Terminal image protocol [default: auto] [possible values: auto, iterm, kitty]
+      --uncommitted-detail         Force auto-open the inline split detail pane for uncommitted changes
+      --no-uncommitted-detail      Suppress auto-open of the inline split detail pane for uncommitted changes
+  -U                               Short form of --no-uncommitted-detail
   -h, --help                       Print help
   -V, --version                    Print version
 ```
@@ -118,6 +122,34 @@ Shows the selected commit's metadata (author, date, SHA, parents, message) above
 - **Right panel** — inline diff for the currently selected file
 
 Navigate between commits with actions bound to `next_commit` / `prev_commit` without returning to the list. Press `q` or `Esc` to go back. Diff scrolling (`scroll_diff_down`, `scroll_diff_up`, etc.) and directory navigation (`toggle_directory`, `collapse_directory`) are available as configurable actions in the `[keybind]` section.
+
+### Uncommitted Changes Detail
+
+When your working tree has uncommitted changes, `gg` automatically opens an inline split detail view on the "Uncommitted changes" row at the top of the commit list. This shows modified files on the left and their diffs on the right, so you can review pending changes at a glance.
+
+![Uncommitted Changes Detail](images/uncommitted-detail.png)
+
+Navigate the file list with `j`/`k` and scroll the diff pane using your configured detail view keybindings.
+
+This behavior is enabled by default. To disable it:
+
+**Via CLI flag:**
+```bash
+# Suppress the auto-open for this invocation
+gg --no-uncommitted-detail
+gg -U
+
+# Explicitly enable (overrides config)
+gg --uncommitted-detail
+```
+
+**Via config file:**
+```toml
+[core]
+show_uncommitted_detail = false
+```
+
+The CLI flags override the config file setting. When disabled, the "Uncommitted changes" row still appears in the list — it just won't auto-expand on launch. You can still select it and press `Enter` to view the detail.
 
 ### Refs View (`Tab`)
 
@@ -277,6 +309,7 @@ diff_hunk_header = "cyan"
 | `graph_style` | string | `"rounded"` | `"rounded"`, `"angular"` |
 | `initial_selection` | string | `"latest"` | `"latest"`, `"head"` |
 | `protocol` | string | `"auto"` | `"auto"`, `"iterm"`, `"kitty"` |
+| `show_uncommitted_detail` | bool | `true` | Auto-open split detail for uncommitted changes |
 
 #### `[core.search]`
 
