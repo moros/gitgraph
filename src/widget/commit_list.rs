@@ -106,6 +106,10 @@ pub struct CommitInfo {
     pub graph_color: Color,
     /// Pre-encoded graph image string (iTerm2/Kitty protocol). Empty until Phase 3C.
     pub graph_line: String,
+    /// True when this row represents uncommitted working-tree changes (not a real commit).
+    pub is_uncommitted: bool,
+    /// File changes for the uncommitted row (empty for regular commits).
+    pub uncommitted_files: Vec<crate::git::FileChange>,
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +840,13 @@ fn render_graph(buf: &mut Buffer, area: Rect, state: &CommitListState) {
             };
 
             buf[(graph_x, y)].set_symbol(&ci.graph_line);
+            if ci.is_uncommitted {
+                buf[(graph_x, y)].set_style(
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
             for x in (graph_x + 1)..area.right() {
                 buf[(x, y)].set_skip(true);
             }
@@ -860,6 +871,19 @@ fn render_subject(buf: &mut Buffer, area: Rect, state: &CommitListState, theme: 
     }
     let items: Vec<ListItem> = rendering_iter(state)
         .map(|(i, ci)| {
+            // Distinct rendering for the uncommitted-changes row.
+            if ci.is_uncommitted {
+                let spans = vec![
+                    Span::styled(
+                        "Uncommitted changes",
+                        Style::default()
+                            .fg(Color::LightRed)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                ];
+                return to_list_item(i, spans, state, theme);
+            }
+
             let mut spans = refs_spans(
                 ci,
                 &state.head,
@@ -1237,6 +1261,8 @@ mod tests {
                 refs: vec![],
                 graph_color: Color::White,
                 graph_line: String::new(),
+                is_uncommitted: false,
+                uncommitted_files: vec![],
             })
             .collect();
         CommitListState::new(commits, 6, Head::None, FxHashMap::default(), false, false)
@@ -1364,6 +1390,13 @@ mod tests {
         let widths = calc_cell_widths(80, 20, 6, 20, 10, &columns);
         assert_eq!(widths.len(), 3);
         assert!(matches!(widths[1], Constraint::Min(0)));
+    }
+
+    #[test]
+    fn uncommitted_row_fields_default_false() {
+        let state = make_state(1);
+        assert!(!state.commits[0].is_uncommitted);
+        assert!(state.commits[0].uncommitted_files.is_empty());
     }
 
     #[test]

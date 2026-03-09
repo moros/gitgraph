@@ -2,24 +2,40 @@
 
 use crate::config::Config;
 use crate::event::{AppEvent, Sender};
+use crate::git::FileChange;
 use crate::keybind::{UserEvent, UserEventWithCount};
 use crate::widget::commit_list::{CommitList, CommitListState, SearchState};
 use crossterm::event::KeyEvent;
-use ratatui::{layout::Rect, Frame};
+use ratatui::{
+    layout::{Constraint, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Borders, List, ListItem},
+    Frame,
+};
 use std::rc::Rc;
 
 pub struct ListView {
     commit_list_state: Option<CommitListState>,
     config: Rc<Config>,
     tx: Sender,
+    /// When true, render a split pane below the commit list showing uncommitted file changes.
+    show_inline_detail: bool,
 }
 
 impl ListView {
     pub fn new(commit_list_state: CommitListState, config: Rc<Config>, tx: Sender) -> Self {
+        // Auto-open the inline detail when an uncommitted row is present at index 0.
+        let show_inline_detail = commit_list_state
+            .commits
+            .first()
+            .map(|c| c.is_uncommitted)
+            .unwrap_or(false);
         Self {
             commit_list_state: Some(commit_list_state),
             config,
             tx,
+            show_inline_detail,
         }
     }
 
@@ -71,7 +87,15 @@ impl ListView {
         }
 
         match event {
-            UserEvent::Quit | UserEvent::ForceQuit => {
+            UserEvent::Quit => {
+                if self.show_inline_detail {
+                    // q collapses the inline split detail rather than quitting.
+                    self.show_inline_detail = false;
+                } else {
+                    self.tx.send(AppEvent::Quit);
+                }
+            }
+            UserEvent::ForceQuit => {
                 self.tx.send(AppEvent::Quit);
             }
             UserEvent::NavigateDown | UserEvent::SelectDown => {
@@ -161,7 +185,18 @@ impl ListView {
                 self.tx.send(AppEvent::ClearStatusLine);
             }
             UserEvent::Confirm => {
-                self.tx.send(AppEvent::OpenDetail);
+                let idx = self.list_state().selected + self.list_state().offset;
+                let is_uncommitted = self
+                    .list_state()
+                    .commits
+                    .get(idx)
+                    .map(|c| c.is_uncommitted)
+                    .unwrap_or(false);
+                if is_uncommitted {
+                    self.show_inline_detail = true;
+                } else {
+                    self.tx.send(AppEvent::OpenDetail);
+                }
             }
             UserEvent::OpenRefs => {
                 self.tx.send(AppEvent::OpenRefs);
@@ -206,8 +241,30 @@ impl ListView {
     }
 
     pub fn render(&mut self, f: &mut Frame, area: Rect) {
-        let widget = CommitList::new(self.config.clone());
-        f.render_stateful_widget(widget, area, self.list_state_mut());
+        if self.show_inline_detail {
+            let [list_area, detail_area] = Layout::vertical([
+                Constraint::Percentage(25),
+                Constraint::Percentage(75),
+            ])
+            .areas(area);
+
+            let widget = CommitList::new(self.config.clone());
+            f.render_stateful_widget(widget, list_area, self.list_state_mut());
+
+            // Collect files after the stateful render (borrow ends).
+            let files: Vec<FileChange> = self
+                .commit_list_state
+                .as_ref()
+                .and_then(|s| s.commits.first())
+                .filter(|c| c.is_uncommitted)
+                .map(|c| c.uncommitted_files.clone())
+                .unwrap_or_default();
+
+            render_inline_detail_pane(f, detail_area, &files);
+        } else {
+            let widget = CommitList::new(self.config.clone());
+            f.render_stateful_widget(widget, area, self.list_state_mut());
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
@@ -250,4 +307,57 @@ impl ListView {
             self.tx.send(AppEvent::ClearStatusLine);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Inline detail pane renderer
+// ---------------------------------------------------------------------------
+
+/// Render the bottom split pane showing staged/unstaged file changes.
+fn render_inline_detail_pane(f: &mut Frame, area: Rect, files: &[FileChange]) {
+    let block = Block::default()
+        .title(" Uncommitted Changes (q to close) ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::LightRed));
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    if files.is_empty() {
+        let msg = Line::from(
+            Span::styled(
+                "  No staged or unstaged changes detected.",
+                Style::default().fg(Color::DarkGray),
+            )
+        );
+        f.render_widget(
+            ratatui::widgets::Paragraph::new(msg),
+            inner,
+        );
+        return;
+    }
+
+    let items: Vec<ListItem> = files
+        .iter()
+        .map(|change| match change {
+            FileChange::Add(path) => ListItem::new(Line::from(vec![
+                Span::styled("A  ", Style::default().fg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+                Span::raw(path.clone()),
+            ])),
+            FileChange::Modify(path) => ListItem::new(Line::from(vec![
+                Span::styled("M  ", Style::default().fg(Color::LightYellow).add_modifier(Modifier::BOLD)),
+                Span::raw(path.clone()),
+            ])),
+            FileChange::Delete(path) => ListItem::new(Line::from(vec![
+                Span::styled("D  ", Style::default().fg(Color::LightRed).add_modifier(Modifier::BOLD)),
+                Span::raw(path.clone()),
+            ])),
+            FileChange::Move(from, to) => ListItem::new(Line::from(vec![
+                Span::styled("R  ", Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+                Span::raw(format!("{from} → {to}")),
+            ])),
+        })
+        .collect();
+
+    f.render_widget(List::new(items), inner);
 }

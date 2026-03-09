@@ -2,7 +2,7 @@
 
 use crate::config::{Config, GraphWidth, InitialSelection, Protocol, DEFAULT_GRAPH_MAX_WIDTH};
 use crate::event::{AppEvent, EventHandler, Sender};
-use crate::git::{CommitHash, Head, Ref, Repository};
+use crate::git::{Commit, CommitHash, FileChange, Head, Ref, Repository};
 use crate::graph::image::{
     CellWidthType, GraphImageManager, GraphStyle as ImageGraphStyle, ImageColors,
 };
@@ -98,6 +98,7 @@ impl App {
         tx: Sender,
         restore_hash: Option<&CommitHash>,
         use_text_graph: bool,
+        uncommitted_files: Vec<FileChange>,
     ) -> Self {
         // Build CommitInfo for each commit in display order
         let branches = &config.graph.color.branches;
@@ -159,7 +160,7 @@ impl App {
             None
         };
 
-        let commits: Vec<CommitInfo> = graph
+        let mut commits: Vec<CommitInfo> = graph
             .commits
             .iter()
             .enumerate()
@@ -198,9 +199,31 @@ impl App {
                     refs,
                     graph_color,
                     graph_line,
+                    is_uncommitted: false,
+                    uncommitted_files: vec![],
                 }
             })
             .collect();
+
+        // Prepend a synthetic "Uncommitted changes" row when the working tree is dirty.
+        if !uncommitted_files.is_empty() {
+            // Shift all ref→index entries by 1 to account for the new row at index 0.
+            for idx in ref_name_to_commit_index_map.values_mut() {
+                *idx += 1;
+            }
+            let synthetic = CommitInfo {
+                commit: Commit {
+                    subject: "Uncommitted changes".to_string(),
+                    ..Default::default()
+                },
+                refs: vec![],
+                graph_color: Color::LightRed,
+                graph_line: "◆".to_string(),
+                is_uncommitted: true,
+                uncommitted_files,
+            };
+            commits.insert(0, synthetic);
+        }
 
         let head = repo.head().clone();
         let mut commit_list_state = crate::widget::commit_list::CommitListState::new(
