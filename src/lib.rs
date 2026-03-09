@@ -53,6 +53,7 @@ pub fn run(
                 restore_hash.as_ref(),
                 use_text_graph,
                 uncommitted_files,
+                repo.all_commits_loaded,
             );
 
             match app.run(terminal, &events)? {

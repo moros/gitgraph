@@ -88,6 +88,8 @@ pub struct App {
     image_protocol: Option<ImageProtocol>,
     /// Track terminal focus state
     focused: bool,
+    /// Whether all commits have been loaded (no more batches to fetch).
+    all_commits_loaded: bool,
 }
 
 impl App {
@@ -99,6 +101,7 @@ impl App {
         restore_hash: Option<&CommitHash>,
         use_text_graph: bool,
         uncommitted_files: Vec<FileChange>,
+        all_commits_loaded: bool,
     ) -> Self {
         // Build CommitInfo for each commit in display order
         let branches = &config.graph.color.branches;
@@ -259,6 +262,7 @@ impl App {
             all_refs,
             image_protocol,
             focused: true,
+            all_commits_loaded,
         }
     }
 
@@ -352,6 +356,12 @@ impl App {
                 }
 
                 AppEvent::LoadMore => {
+                    // Skip the expensive tear-down/rebuild cycle when all
+                    // commits are already loaded — this prevents dropped key
+                    // events that make navigation feel sluggish after G/g.
+                    if self.all_commits_loaded {
+                        continue;
+                    }
                     let hash = if let Some(ls) = self.view.take_list_state() {
                         Some(ls.selected_commit_hash().clone())
                     } else {
