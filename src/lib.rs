@@ -40,10 +40,13 @@ pub fn run(
         let mut repo = Repository::load_partial(order, batch_size)?;
         let mut graph = calc_graph(&repo);
 
+        // Create the event handler once and reuse it across LoadMore rebuilds
+        // so buffered key events are not dropped during the rebuild cycle.
+        let events = event::EventHandler::new();
+        let uncommitted_files = detect_uncommitted_changes();
+
         loop {
-            let events = event::EventHandler::new();
             let tx = events.sender();
-            let uncommitted_files = detect_uncommitted_changes();
 
             let mut app = app::App::new(
                 &repo,
@@ -52,7 +55,7 @@ pub fn run(
                 tx,
                 restore_hash.as_ref(),
                 use_text_graph,
-                uncommitted_files,
+                uncommitted_files.clone(),
                 repo.all_commits_loaded,
             );
 
