@@ -119,6 +119,9 @@ pub struct CoreConfig {
     pub initial_selection: InitialSelection,
     /// Terminal image protocol for graph rendering.
     pub protocol: Protocol,
+    /// When `true`, auto-show split detail view on the uncommitted-changes row.
+    #[serde(default = "default_show_uncommitted_detail")]
+    pub show_uncommitted_detail: bool,
     pub search: SearchConfig,
     pub external: ExternalConfig,
     pub diff: DiffConfig,
@@ -138,6 +141,11 @@ fn default_batch_size() -> usize {
     DEFAULT_BATCH_SIZE
 }
 
+// Default: auto-show split detail for uncommitted changes.
+fn default_show_uncommitted_detail() -> bool {
+    true
+}
+
 impl Default for CoreConfig {
     fn default() -> Self {
         Self {
@@ -148,6 +156,7 @@ impl Default for CoreConfig {
             graph_style: GraphStyle::default(),
             initial_selection: InitialSelection::default(),
             protocol: Protocol::default(),
+            show_uncommitted_detail: default_show_uncommitted_detail(),
             search: SearchConfig::default(),
             external: ExternalConfig::default(),
             diff: DiffConfig::default(),
@@ -470,11 +479,28 @@ mod tests {
         assert_eq!(c.graph_style, GraphStyle::Rounded);
         assert_eq!(c.initial_selection, InitialSelection::Latest);
         assert_eq!(c.protocol, Protocol::Auto);
+        assert!(c.show_uncommitted_detail);
         assert!(!c.search.ignore_case);
         assert!(!c.search.fuzzy);
         assert_eq!(c.external.clipboard, "auto");
         assert_eq!(c.diff.color_arg, "always");
         assert_eq!(c.user_command.tab_width, 4);
+    }
+
+    #[test]
+    fn show_uncommitted_detail_can_be_disabled() {
+        let toml_str = r#"
+[core]
+show_uncommitted_detail = false
+"#;
+        let raw: RawConfig = toml::from_str(toml_str).unwrap();
+        assert!(!raw.core.show_uncommitted_detail);
+    }
+
+    #[test]
+    fn show_uncommitted_detail_defaults_to_true_when_absent() {
+        let raw: RawConfig = toml::from_str("").unwrap();
+        assert!(raw.core.show_uncommitted_detail);
     }
 
     #[test]

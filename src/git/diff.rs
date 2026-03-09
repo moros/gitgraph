@@ -184,6 +184,84 @@ fn parse_file_diff(filepath: &str, raw: &str) -> FileDiff {
     result
 }
 
+/// Get file changes for the working tree (staged + unstaged) compared to HEAD.
+///
+/// Uses `git diff --name-status HEAD` which shows all changes in both the
+/// index and the working tree relative to HEAD.
+pub fn get_uncommitted_diff_summary(path: &Path) -> Vec<FileChange> {
+    let mut cmd = Command::new("git")
+        .arg("diff")
+        .arg("--name-status")
+        .arg("HEAD")
+        .current_dir(path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+
+    let stdout = cmd.stdout.take().expect("failed to open stdout");
+    let reader = BufReader::new(stdout);
+
+    let mut changes = Vec::new();
+
+    for line in reader.lines() {
+        let line = line.unwrap();
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.is_empty() {
+            continue;
+        }
+        match &parts[0][0..1] {
+            "A" if parts.len() >= 2 => changes.push(FileChange::Add(parts[1].into())),
+            "M" if parts.len() >= 2 => changes.push(FileChange::Modify(parts[1].into())),
+            "D" if parts.len() >= 2 => changes.push(FileChange::Delete(parts[1].into())),
+            "R" if parts.len() >= 3 => {
+                changes.push(FileChange::Move(parts[1].into(), parts[2].into()))
+            }
+            _ => {}
+        }
+    }
+
+    cmd.wait().unwrap();
+
+    changes
+}
+
+/// Returns the combined staged + unstaged diff for a single uncommitted file.
+///
+/// Tries `git diff HEAD -- filepath` first (covers staged + unstaged changes).
+/// Falls back to `git diff --cached -- filepath` for files staged but not
+/// yet present in HEAD (e.g. newly added files).
+pub fn uncommitted_file_diff(path: &Path, filepath: &str) -> FileDiff {
+    let output = Command::new("git")
+        .arg("diff")
+        .arg("HEAD")
+        .arg("--color=never")
+        .arg("--")
+        .arg(filepath)
+        .current_dir(path)
+        .output();
+
+    let raw = match output {
+        Ok(o) if !o.stdout.is_empty() => String::from_utf8_lossy(&o.stdout).into_owned(),
+        _ => {
+            let output = Command::new("git")
+                .arg("diff")
+                .arg("--cached")
+                .arg("--color=never")
+                .arg("--")
+                .arg(filepath)
+                .current_dir(path)
+                .output();
+            match output {
+                Ok(o) => String::from_utf8_lossy(&o.stdout).into_owned(),
+                Err(_) => String::new(),
+            }
+        }
+    };
+
+    parse_file_diff(filepath, &raw)
+}
+
 /// Get diff output rendered by an external diff tool (e.g. difftastic).
 ///
 /// Uses `git -c diff.external=<tool> diff parent..commit -- filepath`.
@@ -254,6 +332,23 @@ mod tests {
         assert_eq!(diff.removed_lines, 0);
         assert!(diff.old_path.is_none());
         assert!(diff.new_path.is_none());
+    }
+
+    #[test]
+    fn test_uncommitted_file_diff_parses_stats() {
+        // Simulate output from `git diff HEAD --color=never -- foo.rs`
+        let raw = "diff --git a/foo.rs b/foo.rs\n\
+--- a/foo.rs\n\
++++ b/foo.rs\n\
+@@ -1,2 +1,3 @@\n\
+ fn main() {}\n\
++// new comment\n\
+-// old comment\n";
+
+        let diff = parse_file_diff("foo.rs", raw);
+        assert_eq!(diff.filename, "foo.rs");
+        assert_eq!(diff.added_lines, 1);
+        assert_eq!(diff.removed_lines, 1);
     }
 
     #[test]

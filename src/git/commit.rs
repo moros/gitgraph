@@ -38,11 +38,16 @@ pub struct Author {
     pub date: String,
 }
 
-#[derive(Debug, Default, Clone)]
+/// Sentinel hash used for the synthetic uncommitted-changes row.
+pub const UNCOMMITTED_HASH: &str = "0000000000000000000000000000000000000000";
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum CommitType {
     #[default]
     Commit,
     Stash,
+    /// Synthetic row representing working-tree uncommitted changes.
+    Uncommitted,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -102,4 +107,30 @@ pub enum Head {
     Branch { name: String },
     Detached { target: CommitHash },
     None,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uncommitted_hash_is_40_zeros() {
+        assert_eq!(UNCOMMITTED_HASH.len(), 40);
+        assert!(UNCOMMITTED_HASH.chars().all(|c| c == '0'));
+    }
+
+    #[test]
+    fn commit_type_uncommitted_variant() {
+        let ct = CommitType::Uncommitted;
+        assert_eq!(ct, CommitType::Uncommitted);
+        assert_ne!(ct, CommitType::Commit);
+        assert_ne!(ct, CommitType::Stash);
+    }
+
+    #[test]
+    fn commit_hash_from_uncommitted_hash_constant() {
+        let hash: CommitHash = UNCOMMITTED_HASH.into();
+        assert_eq!(hash.as_str(), UNCOMMITTED_HASH);
+        assert_eq!(hash.as_short_hash(), "0000000");
+    }
 }

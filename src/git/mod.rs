@@ -2,7 +2,7 @@ pub mod commit;
 pub mod diff;
 pub mod executor;
 
-pub use commit::{Author, Commit, CommitHash, CommitType, Head, Ref};
+pub use commit::{Author, Commit, CommitHash, CommitType, Head, Ref, UNCOMMITTED_HASH};
 pub use diff::{FileChange, FileDiff};
 
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ use std::process::{Command, Stdio};
 
 use anyhow::Result;
 
-use crate::git::diff::{get_diff_summary, get_initial_commit_additions};
+use crate::git::diff::{get_diff_summary, get_initial_commit_additions, get_uncommitted_diff_summary};
 use crate::git::executor::check_git_repository;
 
 #[derive(Debug, Clone, Copy)]
@@ -214,6 +214,40 @@ impl Repository {
         } else {
             get_diff_summary(&self.path, hash)
         };
+        (commit, changes)
+    }
+
+    /// Returns `true` if the working tree has any staged or unstaged changes.
+    pub fn has_uncommitted_changes(&self) -> bool {
+        let output = Command::new("git")
+            .arg("status")
+            .arg("--porcelain")
+            .current_dir(&self.path)
+            .output();
+        match output {
+            Ok(o) => !o.stdout.is_empty(),
+            Err(_) => false,
+        }
+    }
+
+    /// Build the synthetic `Commit` object used for the uncommitted-changes row.
+    pub fn uncommitted_commit(&self) -> Commit {
+        Commit {
+            hash: UNCOMMITTED_HASH.into(),
+            author: Author::default(),
+            committer: Author::default(),
+            subject: "Uncommitted changes".to_string(),
+            body: String::new(),
+            parent_hashes: Vec::new(),
+            commit_type: CommitType::Uncommitted,
+        }
+    }
+
+    /// Returns the synthetic commit and the list of changed files for the
+    /// uncommitted-changes row (staged + unstaged vs HEAD).
+    pub fn uncommitted_detail(&self) -> (Commit, Vec<FileChange>) {
+        let commit = self.uncommitted_commit();
+        let changes = get_uncommitted_diff_summary(&self.path);
         (commit, changes)
     }
 }

@@ -38,6 +38,10 @@ pub enum AppEvent {
     Refresh,
     /// Scroll reached near the bottom; request loading more commits.
     LoadMore,
+    /// Open the split detail pane for the uncommitted-changes row.
+    OpenUncommittedDetail,
+    /// Dismiss/collapse the split detail pane for uncommitted changes.
+    CloseUncommittedDetail,
     /// Terminal focus lost/gained events
     FocusLost,
     FocusGained,
