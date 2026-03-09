@@ -12,14 +12,23 @@ pub struct ListView {
     commit_list_state: Option<CommitListState>,
     config: Rc<Config>,
     tx: Sender,
+    /// Whether the inline split detail for the uncommitted row is currently visible.
+    pub show_inline_detail: bool,
 }
 
 impl ListView {
     pub fn new(commit_list_state: CommitListState, config: Rc<Config>, tx: Sender) -> Self {
+        let show_inline_detail = commit_list_state
+            .commits
+            .first()
+            .map(|ci| ci.is_uncommitted)
+            .unwrap_or(false)
+            && config.core.show_uncommitted_detail;
         Self {
             commit_list_state: Some(commit_list_state),
             config,
             tx,
+            show_inline_detail,
         }
     }
 
@@ -67,6 +76,13 @@ impl ListView {
                     self.update_search_query();
                 }
             }
+            return;
+        }
+
+        // Dismiss inline uncommitted detail with q
+        if self.show_inline_detail && matches!(event, UserEvent::Quit | UserEvent::Cancel) {
+            self.show_inline_detail = false;
+            self.tx.send(AppEvent::CloseUncommittedDetail);
             return;
         }
 
@@ -161,7 +177,18 @@ impl ListView {
                 self.tx.send(AppEvent::ClearStatusLine);
             }
             UserEvent::Confirm => {
-                self.tx.send(AppEvent::OpenDetail);
+                let ls = self.list_state();
+                let is_uncommitted = ls
+                    .commits
+                    .get(ls.selected + ls.offset)
+                    .map(|ci| ci.is_uncommitted)
+                    .unwrap_or(false);
+                if is_uncommitted {
+                    self.show_inline_detail = true;
+                    self.tx.send(AppEvent::OpenUncommittedDetail);
+                } else {
+                    self.tx.send(AppEvent::OpenDetail);
+                }
             }
             UserEvent::OpenRefs => {
                 self.tx.send(AppEvent::OpenRefs);
