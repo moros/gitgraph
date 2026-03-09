@@ -465,6 +465,8 @@ impl App {
                     self.app_status.status_line = StatusLine::NotificationSuccess(msg);
                 }
 
+                AppEvent::OpenUncommittedDetail | AppEvent::CloseUncommittedDetail => {}
+
                 AppEvent::CopyToClipboard { name, value } => {
                     self.copy_to_clipboard(name, value);
                 }

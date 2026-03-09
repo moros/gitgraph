@@ -19,18 +19,18 @@ pub struct ListView {
     commit_list_state: Option<CommitListState>,
     config: Rc<Config>,
     tx: Sender,
-    /// When true, render a split pane below the commit list showing uncommitted file changes.
-    show_inline_detail: bool,
+    /// Whether the inline split detail for the uncommitted row is currently visible.
+    pub show_inline_detail: bool,
 }
 
 impl ListView {
     pub fn new(commit_list_state: CommitListState, config: Rc<Config>, tx: Sender) -> Self {
-        // Auto-open the inline detail when an uncommitted row is present at index 0.
         let show_inline_detail = commit_list_state
             .commits
             .first()
-            .map(|c| c.is_uncommitted)
-            .unwrap_or(false);
+            .map(|ci| ci.is_uncommitted)
+            .unwrap_or(false)
+            && config.core.show_uncommitted_detail;
         Self {
             commit_list_state: Some(commit_list_state),
             config,
@@ -83,6 +83,13 @@ impl ListView {
                     self.update_search_query();
                 }
             }
+            return;
+        }
+
+        // Dismiss inline uncommitted detail with q
+        if self.show_inline_detail && matches!(event, UserEvent::Quit | UserEvent::Cancel) {
+            self.show_inline_detail = false;
+            self.tx.send(AppEvent::CloseUncommittedDetail);
             return;
         }
 
@@ -185,15 +192,15 @@ impl ListView {
                 self.tx.send(AppEvent::ClearStatusLine);
             }
             UserEvent::Confirm => {
-                let idx = self.list_state().selected + self.list_state().offset;
-                let is_uncommitted = self
-                    .list_state()
+                let ls = self.list_state();
+                let is_uncommitted = ls
                     .commits
-                    .get(idx)
-                    .map(|c| c.is_uncommitted)
+                    .get(ls.selected + ls.offset)
+                    .map(|ci| ci.is_uncommitted)
                     .unwrap_or(false);
                 if is_uncommitted {
                     self.show_inline_detail = true;
+                    self.tx.send(AppEvent::OpenUncommittedDetail);
                 } else {
                     self.tx.send(AppEvent::OpenDetail);
                 }
